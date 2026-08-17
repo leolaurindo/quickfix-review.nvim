@@ -131,8 +131,17 @@ end
 
 local function source_location(range_start, range_end)
 	local value
+	local range_fallback = false
 	if range_start then
 		value = resolver.range_location(vim.api.nvim_get_current_buf(), range_start, range_end)
+		if not value then
+			value = resolver.location()
+			range_fallback = true
+			if value then
+				value.line = nil
+				value.line_end = nil
+			end
+		end
 	else
 		value = resolver.location()
 	end
@@ -146,7 +155,7 @@ local function source_location(range_start, range_end)
 	if current_scope and current_scope.root ~= value.root then
 		return nil, "source buffer belongs to a different repository scope"
 	end
-	return value
+	return value, nil, range_fallback
 end
 
 local function item_location(item)
@@ -399,10 +408,13 @@ function M.add()
 		if start > stop then
 			start, stop = stop, start
 		end
-		local value, err = source_location(start, stop)
+		local value, err, range_fallback = source_location(start, stop)
 		if not value then
 			notify(err, vim.log.levels.WARN)
 			return
+		end
+		if range_fallback then
+			notify("range mapping unavailable; saving a file-level note", vim.log.levels.INFO)
 		end
 		add_source(value, vim.api.nvim_get_current_buf())
 		return
@@ -417,10 +429,13 @@ end
 
 function M.note_range(line1, line2)
 	refresh_scope()
-	local value, err = source_location(line1, line2)
+	local value, err, range_fallback = source_location(line1, line2)
 	if not value then
 		notify(err, vim.log.levels.WARN)
 		return
+	end
+	if range_fallback then
+		notify("range mapping unavailable; saving a file-level note", vim.log.levels.INFO)
 	end
 	add_source(value, vim.api.nvim_get_current_buf())
 end
@@ -559,7 +574,7 @@ function M.export(opts)
 		notify("export failed: " .. tostring(err), vim.log.levels.ERROR)
 		return false, err
 	end
-	local payload, format_err = exporter.format(records, opts.format or "markdown")
+	local payload, format_err = exporter.format(records, opts.format or "markdown", opts)
 	if not payload then
 		notify(format_err, vim.log.levels.ERROR)
 		return false, format_err
@@ -732,6 +747,7 @@ end
 function M.setup(opts)
 	config.setup(opts)
 	resolver.register(require("quickfix_notes.resolvers.codediff"))
+	resolver.register(require("quickfix_notes.resolvers.diffview"))
 	resolver.register(require("quickfix_notes.resolvers.differ"))
 	resolver.register(require("quickfix_notes.resolvers.neogit"))
 	resolver.register(require("quickfix_notes.resolvers.diffs"))
@@ -782,6 +798,13 @@ function M.setup(opts)
 		pattern = { "NeogitBranchCheckout", "NeogitBranchCreate", "NeogitReset" },
 		callback = function()
 			refresh_scope(true)
+			marks.refresh()
+		end,
+	})
+	vim.api.nvim_create_autocmd("User", {
+		group = group,
+		pattern = { "DiffviewViewEnter", "DiffviewDiffBufWinEnter", "DiffviewSelectionChanged" },
+		callback = function()
 			marks.refresh()
 		end,
 	})

@@ -80,13 +80,34 @@ function M.pick(opts)
 		return M.jump(entry)
 	end
 	local ok, Snacks = pcall(require, "snacks")
+	local function preview_with_note(ctx)
+		local path = ctx.item.file
+		if not path or vim.fn.filereadable(path) ~= 1 then
+			return Snacks.picker.preview.file(ctx)
+		end
+		local source = vim.fn.readfile(path)
+		local header = { "Quickfix Note", "-------------" }
+		vim.list_extend(header, vim.split(ctx.item.text or "", "\n", { plain = true }))
+		header[#header + 1] = ""
+		vim.list_extend(header, source)
+		ctx.preview:reset()
+		ctx.preview:set_title(ctx.item.preview_title or vim.fn.fnamemodify(path, ":t"))
+		ctx.preview:set_lines(header)
+		ctx.preview:highlight({ file = path })
+		local position = ctx.item.pos
+		if position then
+			ctx.item.pos = { position[1] + #header - #source, position[2] }
+		end
+		ctx.preview:loc()
+		ctx.item.pos = position
+	end
 	if ok and Snacks.picker and Snacks.picker.pick then
 		return Snacks.picker.pick({
 			items = entries,
 			format = function(item)
 				return { { item.path .. ":" .. (item.line or ""), "String" }, { " - " .. item.text, "Normal" } }
 			end,
-			preview = "file",
+			preview = preview_with_note,
 			confirm = function(picker, item)
 				picker:close()
 				choose(item)

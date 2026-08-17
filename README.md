@@ -91,10 +91,29 @@ require("quickfix_notes").export({
   list = { kind = "quickfix", id = 42 },
   format = "markdown",
   destination = "clipboard",
+  prefix = "# Review\n\n",
+})
+```
+
+Markdown exports also accept optional `prefix` and `suffix` strings. For
+custom formatter and resolver contracts, see
+[`docs/integrations.md`](docs/integrations.md).
+
+Use `text` when a producer stores its useful message in another field or when
+you want note-only output:
+
+```lua
+require("quickfix_notes").export({
+  text = function(item, note)
+    return note and note.text or item.user_data and item.user_data.message or item.text
+  end,
 })
 ```
 
 Built-in destinations are `clipboard`, `file`, and optional `sidekick`.
+
+See [`docs/integrations.md`](docs/integrations.md) for resolver, picker,
+formatter, destination, and quickfix integration contracts.
 
 ## Persistence
 

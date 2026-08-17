@@ -68,12 +68,20 @@ function M.records(opts)
 						line = item.lnum,
 						line_end = item.end_lnum,
 					})
+				local text = note and annotations.composed_text(note) or item.text or ""
+				if type(opts.text) == "function" then
+					local ok, selected = pcall(opts.text, item, note, text)
+					if not ok then
+						return nil, "text selector failed for item " .. index .. ": " .. tostring(selected)
+					end
+					text = selected == nil and text or tostring(selected)
+				end
 				records[#records + 1] = {
 					index = index,
 					path = path,
 					line = loc.line,
 					line_end = loc.line_end,
-					text = note and annotations.composed_text(note) or item.text or "",
+					text = text,
 					id = note and note.id,
 					kind = resolved.kind,
 				}
@@ -86,12 +94,12 @@ function M.records(opts)
 	return records, nil, { snapshot = snapshot, target = resolved, errors = errors }
 end
 
-function M.format(records, name)
+function M.format(records, name, opts)
 	local ok, formatter = pcall(require, "quickfix_notes.formatters." .. (name or "markdown"))
 	if not ok then
 		return nil, "unknown formatter: " .. tostring(name)
 	end
-	return formatter.format(records)
+	return formatter.format(records, opts)
 end
 
 return M
