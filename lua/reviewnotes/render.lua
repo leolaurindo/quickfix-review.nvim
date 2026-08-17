@@ -31,6 +31,30 @@ function M.render(notes, scope)
 	return table.concat(lines, "\n"):gsub("\n+$", "\n")
 end
 
+---Render valid quickfix items as markdown.
+---@param items table[]
+---@param title? string
+---@return string markdown
+function M.render_quickfix(items, title)
+	local lines = { "# Quickfix: " .. (title or "quickfix"), "" }
+	local files = {}
+	for _, item in ipairs(items) do
+		files[item.file] = files[item.file] or {}
+		files[item.file][#files[item.file] + 1] = item
+	end
+
+	for file, file_items in pairs(files) do
+		lines[#lines + 1] = "## " .. file
+		lines[#lines + 1] = ""
+		for _, item in ipairs(file_items) do
+			lines[#lines + 1] = M.note_line(item)
+		end
+		lines[#lines + 1] = ""
+	end
+
+	return table.concat(lines, "\n"):gsub("\n+$", "\n")
+end
+
 ---@param n table
 ---@return string one line: `path:10-20 - text`
 function M.note_line(n)

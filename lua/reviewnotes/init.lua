@@ -8,6 +8,7 @@ local ui = require("reviewnotes.ui")
 local render = require("reviewnotes.render")
 local sender = require("reviewnotes.sender")
 local picker = require("reviewnotes.picker")
+local list = require("reviewnotes.list")
 local hover_tick = 0
 
 local function notify(msg, level)
@@ -45,7 +46,46 @@ end
 
 -- --- actions ---------------------------------------------------------------
 
-local function add_note_at(loc, bufnr)
+local function persist_review_list()
+	if not config.get().persist_review_list then
+		return
+	end
+	local ok, persist = pcall(require, "quickfix_persist")
+	local scope = store.scope()
+	local id = picker.sync_quickfix(store.all())
+	if ok and scope and id then
+		persist.save({ name = config.get().quickfix_title, scope = scope, target = { kind = "quickfix", id = id } })
+	end
+end
+
+local function clear_review_list()
+	picker.clear_quickfix()
+	local ok, persist = pcall(require, "quickfix_persist")
+	local scope = store.scope()
+	if ok and scope then
+		persist.delete({ name = config.get().quickfix_title, scope = scope })
+	end
+end
+
+local function restore_review_list()
+	if not config.get().persist_review_list then
+		return
+	end
+	local ok, persist = pcall(require, "quickfix_persist")
+	local scope = store.scope()
+	if not ok or not scope then
+		return
+	end
+	local snapshot = persist.load({ name = config.get().quickfix_title, scope = scope })
+	if snapshot then
+		persist.restore(snapshot, { kind = "quickfix" })
+	end
+	if #store.all() > 0 then
+		persist_review_list()
+	end
+end
+
+local function add_note_at(loc, bufnr, on_saved)
 	local existing = store.at(loc)
 	ui.note_input({ location = loc, existing = existing }, function(result)
 		if not result then
@@ -59,10 +99,108 @@ local function add_note_at(loc, bufnr)
 			notify(("reviewnotes: note added (%d total)"):format(store.count()), vim.log.levels.INFO)
 		end
 		marks.render(bufnr)
+		persist_review_list()
+		if on_saved then
+			on_saved()
+		end
 	end)
 end
 
+local function qf_note()
+	local entry = list.current()
+	local review_note = type(entry.item.user_data) == "table" and entry.item.user_data.quickfix_notes
+	if review_note then
+		local existing = store.get(review_note.id)
+		if not existing then
+			return
+		end
+		ui.note_input({ location = existing, existing = existing }, function(result)
+			if result then
+				store.update(existing.id, { text = result.text })
+				marks.refresh()
+				persist_review_list()
+			end
+		end)
+		return
+	end
+	local loc = list.location(entry, store.scope() and store.scope().root)
+	if not loc then
+		notify("reviewnotes: current list entry has no file", vim.log.levels.WARN)
+		return
+	end
+	add_note_at(loc, entry.item.bufnr and entry.item.bufnr > 0 and entry.item.bufnr or nil)
+end
+
+local function qf_edit()
+	local entry = list.current()
+	local loc = list.location(entry, store.scope() and store.scope().root)
+	if not loc then
+		notify("reviewnotes: current list entry has no file", vim.log.levels.WARN)
+		return
+	end
+	if not store.at(loc) then
+		notify("reviewnotes: no note at this list entry", vim.log.levels.INFO)
+		return
+	end
+	add_note_at(loc, entry.item.bufnr and entry.item.bufnr > 0 and entry.item.bufnr or nil)
+end
+
+local function sync_review_edits(id)
+	local review = vim.fn.getqflist({ id = id, all = 1 })
+	if review.title ~= config.get().quickfix_title then
+		return
+	end
+	local remaining = {}
+	for _, item in ipairs(review.items or {}) do
+		local note = type(item.user_data) == "table" and item.user_data.quickfix_notes
+		if note then
+			remaining[note.id] = true
+			if store.get(note.id) then
+				store.update(note.id, { text = item.text })
+			end
+		end
+	end
+	for _, note in ipairs(store.all()) do
+		if not remaining[note.id] then
+			store.delete(note.id)
+		end
+	end
+	marks.refresh()
+	persist_review_list()
+end
+
+local function qf_record(item, kind, list_key, index)
+	local user_data = item.user_data
+	local review_note = type(user_data) == "table" and user_data.quickfix_notes
+	local is_review_note = review_note
+		or type(user_data) == "table" and user_data.id and user_data.file and user_data.text
+	user_data = review_note or user_data
+	local line = is_review_note and user_data.line or item.lnum
+	local loc = list.location_for(kind, item, store.scope() and store.scope().root, list_key, index)
+	local note = loc and store.at(loc)
+	local text = is_review_note and user_data.text
+		or type(user_data) == "table" and user_data.error_text
+		or item.text
+		or ""
+	if note and note.text ~= "" and note.text ~= text then
+		text = text ~= "" and text .. "\nNote: " .. note.text or note.text
+	end
+	return {
+		file = is_review_note and user_data.file
+			or list.file(item, store.scope() and store.scope().root)
+			or "[quickfix]",
+		line = line and line > 0 and line or nil,
+		line_end = is_review_note and user_data.line_end or item.end_lnum,
+		side = is_review_note and user_data.side or nil,
+		text = text,
+	}
+end
+
 function M.note()
+	if vim.bo.buftype == "quickfix" then
+		qf_note()
+		return
+	end
 	if vim.fn.mode():match("[vV\022]") then
 		local loc, err = visual_range_location()
 		if not loc then
@@ -114,33 +252,114 @@ function M.export()
 	local notes = store.all()
 	if #notes == 0 then
 		notify("reviewnotes: no notes to export", vim.log.levels.INFO)
-		return
+		return false
 	end
 	local md = render.render(notes)
 	local ok, result = sender.send(md, config.get().send_opts)
 	if not ok then
 		notify("export failed: " .. result, vim.log.levels.ERROR)
-		return
+		return false
 	end
 	notify(
 		("reviewnotes: exported %d notes via %s (%s)"):format(#notes, sender.active(), result or "ok"),
 		vim.log.levels.INFO
 	)
+	return true
+end
+
+function M.export_qf()
+	local current, kind, list_key = list.items()
+	local records = {}
+	for index, item in ipairs(current.items or {}) do
+		if item.valid == 1 or type(item.user_data) == "table" and item.user_data.quickfix_notes then
+			records[#records + 1] = qf_record(item, kind, list_key, index)
+		end
+	end
+	if #records == 0 then
+		notify("reviewnotes: no " .. kind .. "-list entries to export", vim.log.levels.INFO)
+		return
+	end
+	local md = render.render_quickfix(records, current.title or kind)
+	local ok, result = sender.send(md, config.get().send_opts)
+	if not ok then
+		notify("quickfix export failed: " .. result, vim.log.levels.ERROR)
+		return
+	end
+	notify(
+		("reviewnotes: exported %d %s-list entries via %s (%s)"):format(#records, kind, sender.active(), result or "ok"),
+		vim.log.levels.INFO
+	)
+end
+
+function M.save_list(name)
+	local ok, persist = pcall(require, "quickfix_persist")
+	if not ok then
+		notify("quickfix_persist is required to save lists", vim.log.levels.WARN)
+		return
+	end
+	local scope = store.scope()
+	if not scope then
+		notify("reviewnotes: no repository scope", vim.log.levels.WARN)
+		return
+	end
+	local entry = list.current()
+	local saved, err = persist.save({
+		name = name,
+		scope = scope,
+		target = { kind = entry.kind, winid = entry.winid },
+	})
+	if not saved then
+		notify("could not save list: " .. err, vim.log.levels.ERROR)
+		return
+	end
+	notify("saved " .. entry.kind .. " list: " .. name, vim.log.levels.INFO)
+end
+
+function M.load_list(name)
+	local ok, persist = pcall(require, "quickfix_persist")
+	if not ok then
+		notify("quickfix_persist is required to load lists", vim.log.levels.WARN)
+		return
+	end
+	local scope = store.scope()
+	if not scope then
+		notify("reviewnotes: no repository scope", vim.log.levels.WARN)
+		return
+	end
+	local snapshot, err = persist.load({ name = name, scope = scope })
+	if not snapshot then
+		notify("could not load list: " .. err, vim.log.levels.ERROR)
+		return
+	end
+	local target = { kind = snapshot.kind }
+	if target.kind == "location" then
+		target.winid = vim.api.nvim_get_current_win()
+	end
+	local restored
+	restored, err = persist.restore(snapshot, target)
+	if not restored then
+		notify("could not restore list: " .. err, vim.log.levels.ERROR)
+		return
+	end
+	persist.watch({ name = name, scope = scope, target = target })
+	notify("loaded " .. snapshot.kind .. " list: " .. name, vim.log.levels.INFO)
 end
 
 function M.export_and_clear()
-	M.export()
-	M.clear()
+	if M.export() then
+		M.clear()
+	end
 end
 
 function M.clear()
 	local count = store.clear()
+	clear_review_list()
 	marks.refresh()
 	notify(("reviewnotes: cleared %d notes"):format(count), vim.log.levels.INFO)
 end
 
 function M.list()
-	picker.open(store.all(), config.get().list)
+	picker.open(store.all(), "quickfix")
 end
 
 -- Always send the notes to the quickfix list, regardless of the configured
@@ -192,6 +411,7 @@ local function reload_scope()
 	local changed = store.switch_scope(root)
 	if changed then
 		marks.refresh()
+		restore_review_list()
 	end
 end
 
@@ -265,6 +485,81 @@ function M.setup(opts)
 	local function cmd(name, fn, extra)
 		vim.api.nvim_create_user_command(name, fn, extra or {})
 	end
+	local function commands(prefix)
+		cmd(prefix .. "Add", function(cmd_opts)
+			if cmd_opts.range and cmd_opts.range > 0 then
+				M.note_range(cmd_opts.line1, cmd_opts.line2)
+			else
+				M.note()
+			end
+		end, { desc = "add a note at the current location", range = true })
+		cmd(prefix .. "Send", M.send, { desc = "send the note at the cursor" })
+		cmd(prefix .. "Export", M.export, { desc = "export all notes" })
+		cmd(prefix .. "ExportList", M.export_qf, { desc = "export the current quickfix or location list" })
+		cmd(prefix .. "SaveList", function(cmd_opts)
+			M.save_list(cmd_opts.args)
+		end, { nargs = 1, desc = "save and autosave the current list" })
+		cmd(prefix .. "LoadList", function(cmd_opts)
+			M.load_list(cmd_opts.args)
+		end, { nargs = 1, desc = "load and autosave a list" })
+		cmd(prefix .. "ExportAndClear", M.export_and_clear, { desc = "export then clear all notes" })
+		cmd(prefix .. "Clear", M.clear, { desc = "clear all notes" })
+		cmd(prefix .. "List", M.list, { desc = "list notes" })
+		cmd(prefix .. "Next", M.next, { desc = "jump to the next note" })
+		cmd(prefix .. "Prev", M.prev, { desc = "jump to the previous note" })
+	end
+	local function setup_qf_buffer(buf)
+		vim.bo[buf].modifiable = true
+		vim.keymap.set("n", "<CR>", function()
+			local current = list.current()
+			local note = type(current.item.user_data) == "table" and current.item.user_data.quickfix_notes
+			if note then
+				picker.jump(note)
+			else
+				vim.cmd(current.kind == "location" and "ll" or "cc")
+			end
+		end, { buffer = buf, desc = "Jump to quickfix location" })
+		vim.keymap.set("n", keys.note, qf_note, { buffer = buf, desc = "ReviewNoteAtQuickfix" })
+		vim.keymap.set("n", "a", qf_note, { buffer = buf, desc = "ReviewNoteAtQuickfix" })
+		vim.keymap.set("n", "e", qf_edit, { buffer = buf, desc = "ReviewEditQuickfixNote" })
+		vim.keymap.set("n", keys.export, M.export_qf, { buffer = buf, desc = "ReviewExportList" })
+		if not vim.b[buf].quickfix_notes_sync then
+			vim.b[buf].quickfix_notes_sync = true
+			vim.api.nvim_create_autocmd("BufWriteCmd", {
+				buffer = buf,
+				callback = function()
+					local current = list.current()
+					if current.kind == "quickfix" and current.title == config.get().quickfix_title then
+						vim.schedule(function()
+							sync_review_edits(current.id)
+						end)
+					end
+				end,
+			})
+		end
+	end
+	vim.api.nvim_create_autocmd("FileType", {
+		group = group,
+		pattern = "qf",
+		callback = function(ev)
+			setup_qf_buffer(ev.buf)
+		end,
+	})
+	vim.api.nvim_create_autocmd("BufEnter", {
+		group = group,
+		callback = function(ev)
+			if vim.bo[ev.buf].filetype == "qf" then
+				setup_qf_buffer(ev.buf)
+			end
+		end,
+	})
+	for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.bo[buf].filetype == "qf" then
+			setup_qf_buffer(buf)
+		end
+	end
+	cmd("ReviewQfNote", qf_note, { desc = "reviewnotes: add or edit note at quickfix entry" })
+	cmd("ReviewQfEdit", qf_edit, { desc = "reviewnotes: edit note at quickfix entry" })
 	cmd("ReviewNote", function(cmd_opts)
 		if cmd_opts.range and cmd_opts.range > 0 then
 			M.note_range(cmd_opts.line1, cmd_opts.line2)
@@ -278,6 +573,12 @@ function M.setup(opts)
 	cmd("ReviewExport", function()
 		M.export()
 	end, { desc = "reviewnotes: export all notes" })
+	cmd("ReviewExportQf", function()
+		M.export_qf()
+	end, { desc = "reviewnotes: export actual quickfix entries" })
+	cmd("ReviewExportList", function()
+		M.export_qf()
+	end, { desc = "reviewnotes: export current quickfix or location list" })
 	cmd("ReviewExportAndClear", function()
 		M.export_and_clear()
 	end, { desc = "reviewnotes: export then clear" })
@@ -306,6 +607,7 @@ function M.setup(opts)
 		local enabled = marks.toggle()
 		notify("reviewnotes: mode " .. (enabled and "on" or "off"), vim.log.levels.INFO)
 	end, { desc = "reviewnotes: toggle visual review mode" })
+	commands("QuickfixNotes")
 
 	local map = function(lhs, rhs, desc)
 		vim.keymap.set("n", lhs, rhs, { desc = desc })

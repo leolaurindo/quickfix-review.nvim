@@ -48,11 +48,15 @@ local function scope_id(root, branch)
 end
 
 local function data_dir()
+	return vim.fn.stdpath("data") .. "/quickfix-notes"
+end
+
+local function legacy_data_dir()
 	return vim.fn.stdpath("data") .. "/reviewnotes"
 end
 
-local function file_for(root, branch)
-	return data_dir() .. "/" .. scope_id(root, branch) .. ".json"
+local function file_for(root, branch, directory)
+	return (directory or data_dir()) .. "/" .. scope_id(root, branch) .. ".json"
 end
 
 -- --- persistence ------------------------------------------------------------
@@ -74,6 +78,9 @@ function M.switch_scope(root, branch)
 
 	notes = {}
 	local file = file_for(root, branch)
+	if vim.fn.filereadable(file) == 0 then
+		file = file_for(root, branch, legacy_data_dir())
+	end
 	if vim.fn.filereadable(file) == 1 then
 		local ok, data = pcall(vim.fn.json_decode, table.concat(vim.fn.readfile(file), "\n"))
 		if ok and type(data) == "table" then
@@ -111,6 +118,8 @@ function M.add(loc, text)
 		side = loc.side,
 		revision = loc.revision,
 		hash = loc.hash,
+		list_key = loc.list_key,
+		item_key = loc.item_key,
 		text = text,
 	}
 	notes[#notes + 1] = note
@@ -125,6 +134,14 @@ function M.update(id, fields)
 				n[k] = v
 			end
 			persist()
+			return n
+		end
+	end
+end
+
+function M.get(id)
+	for _, n in ipairs(notes) do
+		if n.id == id then
 			return n
 		end
 	end
@@ -160,6 +177,14 @@ end
 
 ---The note attached to the same (file, line, side, hash) as `loc`.
 function M.at(loc)
+	if loc.item_key then
+		for _, n in ipairs(notes) do
+			if n.item_key == loc.item_key then
+				return n
+			end
+		end
+		return
+	end
 	for _, n in ipairs(notes) do
 		if n.file == loc.file and n.line == loc.line and n.side == loc.side and n.hash == loc.hash then
 			return n
