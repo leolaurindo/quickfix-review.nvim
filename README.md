@@ -78,10 +78,10 @@ native order:
 - `lua/other.lua:20-24` - Existing diagnostic text
 ```
 
-When an annotated producer item already has useful text, the export keeps both
-parts: `Existing diagnostic text | Note: Explain this condition`. The original
-producer text remains on the native producer list, while the owned review copy
-uses the composed display text.
+For annotated items, export uses the note text. Unannotated items use their
+native producer text. The original producer text remains unchanged on the
+native producer list. To select another producer field or intentionally combine
+both values, pass the export `text(item, note, text)` callback.
 
 Formatters and destinations are independent. The Lua API accepts an explicit
 list identity:
@@ -123,13 +123,6 @@ available, the owned review list is automatically saved as
 rechecked on directory changes, focus regain, shell commands, and supported
 Git-plugin events. Explicit save/load operations can persist arbitrary qf and
 location lists, but transient producer lists are never watched automatically.
-
-Existing `reviewnotes` JSON is imported once when no owned snapshot exists; the
-old file is left untouched.
-
-`require("reviewnotes")`, `require("quickfix-notes")`, and the existing
-`Review...` commands remain compatibility entry points for one migration
-release. New code should use `quickfix_notes`.
 
 Run tests with:
 

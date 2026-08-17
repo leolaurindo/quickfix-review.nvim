@@ -44,22 +44,8 @@ function M.set(item, location, text, existing)
 	local old = M.get(item)
 	local note = M.create(location, text, existing and existing.id or old and old.id)
 	note.created_at = existing and existing.created_at or old and old.created_at or note.created_at
-	local source_text = old and old.source_text or item.text
-	if source_text and source_text ~= "" and source_text ~= note.text then
-		note.source_text = source_text
-	end
 	item.user_data[M.key] = note
 	return note
-end
-
-function M.composed_text(note)
-	if type(note) ~= "table" then
-		return ""
-	end
-	if note.source_text and note.source_text ~= "" and note.source_text ~= note.text then
-		return note.source_text .. " | Note: " .. (note.text or "")
-	end
-	return "Note: " .. (note.text or "")
 end
 
 function M.update(item, text, location)

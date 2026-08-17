@@ -69,12 +69,11 @@ The utility plugin must never require `quickfix_notes`, inspect
 Keep these note-specific policies and behaviors:
 
 - `annotations.lua` and the `user_data.quickfix_notes` schema.
-- Note IDs, note text, timestamps, source text, and composed note display.
+- Note IDs, note text, and timestamps.
 - The owned `Quickfix Notes` list and its ownership/scope context.
 - Mirroring producer annotations into the owned review list.
 - Source-buffer triangles and note hover floats.
 - Normal/diff/source resolver registry and adapters.
-- Legacy `reviewnotes` migration.
 - Note filtering in `QuickfixNotesPick` and `QuickfixNotesPickCurrent`.
 - Note-aware export text selection and `ExportAndClear` policy.
 - The plain-text note editor and note commands.

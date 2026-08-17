@@ -71,16 +71,7 @@ local function restore_review()
 	end
 	local snapshot, err = persist.load({ namespace = "quickfix-notes", name = "review", scope = current_scope })
 	if not snapshot then
-		if err == "not-found: snapshot not found" or err == "snapshot not found" then
-			local migrated, migration_err = require("quickfix_notes.migrate").apply(scope_id(), current_scope, {
-				title = config.get().quickfix_title,
-			})
-			if migrated then
-				persist_review()
-			elseif migration_err and migration_err ~= "legacy notes not found" then
-				notify("could not migrate legacy notes: " .. migration_err, vim.log.levels.WARN)
-			end
-		elseif err then
+		if err then
 			notify("could not restore review list: " .. err, vim.log.levels.WARN)
 		end
 		return
@@ -208,7 +199,7 @@ local function add_source(value, bufnr)
 					return nil, update_err
 				end
 				item.type = ""
-				item.text = flatten(annotations.composed_text(note))
+				item.text = flatten(note.text)
 				return true
 			end, existing.id)
 			if not ok then
@@ -251,7 +242,7 @@ local function owned_copy(entry, note)
 	item.valid = 1
 	item.type = ""
 	item.module = ""
-	item.text = flatten(annotations.composed_text(note))
+	item.text = flatten(note.text)
 	if item.end_lnum == 0 then
 		item.end_lnum = nil
 	end
@@ -525,7 +516,7 @@ function M.open_list()
 				table.remove(items, index)
 				changed = true
 			else
-				local text = flatten(annotations.composed_text(note))
+				local text = flatten(note.text)
 				if item.type == "N" or item.text ~= text then
 					item.type = ""
 					item.text = text

@@ -68,7 +68,7 @@ function M.records(opts)
 						line = item.lnum,
 						line_end = item.end_lnum,
 					})
-				local text = note and annotations.composed_text(note) or item.text or ""
+				local text = note and note.text or item.text or ""
 				if type(opts.text) == "function" then
 					local ok, selected = pcall(opts.text, item, note, text)
 					if not ok then

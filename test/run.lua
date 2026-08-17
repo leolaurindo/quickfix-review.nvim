@@ -39,7 +39,7 @@ local after = assert(lists.read(producer_target))
 assert(after.items[1].user_data.code == "X1")
 assert(annotations.get(after.items[1]).text == "line one\nline two")
 assert(notes.export_qf())
-assert(sent == "- `README.md:3-4` - problem | Note: line one line two\n")
+assert(sent == "- `README.md:3-4` - line one line two\n")
 
 local active_id = vim.fn.getqflist({ id = 0 }).id
 local owned, owned_target =
@@ -51,7 +51,7 @@ assert(annotations.set(owned_item, owned_location, "owned\nmultiline"))
 owned.items[1] = owned_item
 assert(lists.replace(owned_target, owned.items, 1, owned.changedtick))
 assert(notes.export())
-assert(sent == "- `README.md:10` - owned | Note: owned multiline\n")
+assert(sent == "- `README.md:10` - owned multiline\n")
 
 local failing = {}
 sender.register({

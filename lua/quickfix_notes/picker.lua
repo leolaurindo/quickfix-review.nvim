@@ -33,7 +33,7 @@ function M.entries(opts)
 				file = location.absolute(loc),
 				line = loc.line,
 				line_end = loc.line_end,
-				text = annotations.composed_text(note),
+				text = note.text,
 				pos = { loc.line or 1, 0 },
 			}
 		end

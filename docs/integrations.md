@@ -74,10 +74,10 @@ native list -> normalized records -> formatter -> destination
 Normalized records contain `path`, `line`, `line_end`, `text`, `id`, and list `kind`.
 
 The native `item.text` remains the producer message. QuickfixNotes stores the
-full note in `user_data.quickfix_notes.text` and captures the original producer
-message as `source_text` when needed for composed export. Native qf rendering
-cannot display an arbitrary `user_data` field without taking over the renderer.
-For export-only field selection, pass a callback:
+full note in `user_data.quickfix_notes.text`; it does not copy or concatenate
+the producer message into the note. Native qf rendering cannot display an
+arbitrary `user_data` field without taking over the renderer. For export-only
+field selection, pass a callback:
 
 ```lua
 require("quickfix_notes").export({
