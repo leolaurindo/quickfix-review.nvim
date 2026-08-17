@@ -4,7 +4,7 @@ M.name = "diffs"
 M.priority = 80
 M.renderable = false
 
-local store = require("reviewnotes.store")
+local location = require("quickfix_notes.location")
 
 local function buf_var(bufnr, name)
 	local ok, v = pcall(vim.api.nvim_buf_get_var, bufnr, name)
@@ -47,8 +47,8 @@ end
 function M.location(bufnr, winid)
 	local name = vim.api.nvim_buf_get_name(bufnr)
 	local src = source(bufnr)
-	local root = (src and src.repo_root) or store.repo_root() or vim.fn.getcwd()
-	root = store.repo_root(root) or root
+	local root = (src and src.repo_root) or location.repo_root() or vim.fn.getcwd()
+	root = location.repo_root(root) or root
 	local branch = vim.fn.system({ "git", "-C", root, "branch", "--show-current" }):gsub("%s+$", "")
 
 	local file, side

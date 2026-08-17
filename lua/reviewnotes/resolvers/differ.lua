@@ -4,7 +4,7 @@ M.name = "differ"
 M.priority = 90
 M.renderable = false -- differ re-renders its buffers; inline marks get wiped
 
-local store = require("reviewnotes.store")
+local location = require("quickfix_notes.location")
 
 local function view_for(bufnr)
 	local ok, differ = pcall(require, "differ.view")
@@ -43,8 +43,8 @@ local function base_location(view, winid)
 	end
 
 	local model = view.model
-	local root = model.root or store.repo_root() or vim.fn.getcwd()
-	root = store.repo_root(root) or root
+	local root = model.root or location.repo_root() or vim.fn.getcwd()
+	root = location.repo_root(root) or root
 
 	-- Prefer the "new" side line (matches the working tree / target commit).
 	local line, side = mapped.new, "new"
@@ -105,8 +105,8 @@ function M.range_location(bufnr, start_line, stop_line)
 		return nil
 	end
 	local model = view.model
-	local root = model.root or store.repo_root() or vim.fn.getcwd()
-	root = store.repo_root(root) or root
+	local root = model.root or location.repo_root() or vim.fn.getcwd()
+	root = location.repo_root(root) or root
 	local loc = {
 		root = root,
 		file = model.path,

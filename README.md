@@ -1,8 +1,8 @@
 # quickfix-notes.nvim
 
-Annotate entries in any Neovim quickfix or location list, navigate their source
-locations, and export the list with its optional notes. Normal files and the
-existing diff resolvers are supported.
+Annotate Neovim quickfix and location-list entries, keep a consolidated
+branch-scoped review list, and export any native list.
+Requires Neovim 0.10 or newer.
 
 ```lua
 require("quickfix_notes").setup({
@@ -10,35 +10,109 @@ require("quickfix_notes").setup({
 })
 ```
 
-`require("quickfix-notes")` is also supported. The former `reviewnotes` module
-and `:Review...` commands remain available during migration.
+## Commands
 
-## Lists
+- `:QuickfixNotesAdd` adds a note at the source cursor, visual range, or current qf row.
+- `:QuickfixNotesEdit` and `:QuickfixNotesDelete` edit or remove an annotation.
+- `:QuickfixNotesList` opens the owned review list.
+- `:QuickfixNotesPick` picks owned annotations; `:QuickfixNotesPickCurrent` picks annotations in the current native list.
+- `:QuickfixNotesExport` exports the displayed native list from a qf buffer, otherwise the owned review list.
+- `:QuickfixNotesExportAndClear` clears only after a successful destination result.
+- `:QuickfixNotesSaveList <name>` and `:QuickfixNotesLoadList <name>` persist explicitly selected native lists.
+- `:QuickfixNotesHide` and `:QuickfixNotesShow` control source inline marks.
+- `:QuickfixNotesHover` shows the note attached to the current qf row.
 
-Open any quickfix or location list and use the configured note mapping (default
-`<leader>rn`) or `a` to add/edit a note for its current entry. Notes remain in
-the plugin store: the producer's list items and metadata are never replaced.
-QuickfixNotes also maintains its own `review` quickfix list from the first note.
+The qf buffer remains native and unmodifiable. Use the note mapping (default
+`<leader>rn`), `a`, or `:QuickfixNotesAdd` on a qf row instead of editing its
+rendered text. Annotated producer rows retain their native text and receive a
+triangle; the full note is available through hover or `:QuickfixNotesHover`.
+Qf annotations are also mirrored into the owned review list.
 
-- `:QuickfixNotesExportList` exports the active quickfix or location list,
-  including attached notes.
-- `:QuickfixNotesList` opens the owned `review` quickfix list.
-- `:QuickfixNotesSaveList <name>` saves the active list through
-  `quickfix_persist` and registers it for autosave.
-- `:QuickfixNotesLoadList <name>` restores a saved list and registers it for
-  autosave.
+Configure qf indicators and note floats independently:
 
-The persistence commands require `quickfix_persist` on `runtimepath`; all note
-and export behavior works without it. With `persist_review_list = true` (the
-default), the owned `review` list is saved and restored automatically.
+```lua
+require("quickfix_notes").setup({
+  quickfix = {
+    inline = true,
+    float = { enabled = true, delay = 500, command = true },
+  },
+})
+```
 
-## Migration
+## Data Model
 
-Existing data under `stdpath("data")/reviewnotes` is read automatically when no
-new snapshot exists. Subsequent note changes write to
-`stdpath("data")/quickfix-notes`, leaving the old file untouched.
+Annotations are stored in `item.user_data.quickfix_notes`; producer item fields,
+producer text, list context, and unknown metadata are preserved. Owned review
+entries are normal valid quickfix items with real `filename`, `lnum`, and
+`end_lnum` fields.
 
-Run headless coverage with:
+The annotation shape is:
+
+```lua
+item.user_data.quickfix_notes = {
+  version = 1,
+  id = "stable-id",
+  text = "Full multiline note",
+  created_at = 1786920000,
+  updated_at = 1786920000,
+  location = {
+    root = "/repo",
+    path = "lua/example.lua",
+    line = 10,
+    line_end = 12,
+    side = "new",
+    revision = nil,
+    hash = nil,
+    resolver = "normal",
+  },
+}
+```
+
+## Export
+
+The default Markdown formatter emits one native-list item per bullet and keeps
+native order:
+
+```markdown
+- `lua/example.lua:10` - Explain this condition
+- `lua/other.lua:20-24` - Existing diagnostic text
+```
+
+When an annotated producer item already has useful text, the export keeps both
+parts: `Existing diagnostic text | Note: Explain this condition`. The original
+producer text remains on the native producer list, while the owned review copy
+uses the composed display text.
+
+Formatters and destinations are independent. The Lua API accepts an explicit
+list identity:
+
+```lua
+require("quickfix_notes").export({
+  list = { kind = "quickfix", id = 42 },
+  format = "markdown",
+  destination = "clipboard",
+})
+```
+
+Built-in destinations are `clipboard`, `file`, and optional `sidekick`.
+
+## Persistence
+
+`quickfix_persist` is optional for annotation and export behavior. When it is
+available, the owned review list is automatically saved as
+`quickfix-notes/review` using a repository and branch-aware scope. Scope is
+rechecked on directory changes, focus regain, shell commands, and supported
+Git-plugin events. Explicit save/load operations can persist arbitrary qf and
+location lists, but transient producer lists are never watched automatically.
+
+Existing `reviewnotes` JSON is imported once when no owned snapshot exists; the
+old file is left untouched.
+
+`require("reviewnotes")`, `require("quickfix-notes")`, and the existing
+`Review...` commands remain compatibility entry points for one migration
+release. New code should use `quickfix_notes`.
+
+Run tests with:
 
 ```sh
 nvim --headless -u NONE -l test/run.lua

@@ -4,7 +4,7 @@ M.name = "neogit"
 M.priority = 70
 M.renderable = false -- neogit re-renders its ui; inline marks get wiped
 
-local store = require("reviewnotes.store")
+local location = require("quickfix_notes.location")
 
 local function status_instance()
 	local ok, status = pcall(require, "neogit.buffers.status")
@@ -118,8 +118,8 @@ end
 
 function M.location(bufnr, _winid)
 	local ft = vim.bo[bufnr].filetype
-	local root = store.repo_root() or vim.fn.getcwd()
-	root = store.repo_root(root) or root
+	local root = location.repo_root() or vim.fn.getcwd()
+	root = location.repo_root(root) or root
 
 	if ft == "NeogitStatus" then
 		local inst = status_instance()

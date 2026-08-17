@@ -1,199 +1,117 @@
 local M = {}
-
--- Store is scoped to a repo + branch (or repo + short-hash when detached).
--- Notes survive across sessions and are cleared only via export-and-clear or
--- an explicit clear command.
-
-local notes = {} -- list of note records
-local scope = nil -- { root, branch }
-
--- --- helpers ---------------------------------------------------------------
-
-local function shell(args)
-	local out = vim.fn.system(args)
-	if vim.v.shell_error ~= 0 then
-		return nil
-	end
-	return vim.trim(out)
-end
-
-local function git_dir(path)
-	if path and vim.fn.filereadable(path) == 1 then
-		return vim.fn.fnamemodify(path, ":p:h")
-	end
-	return path or vim.fn.getcwd()
-end
-
-function M.repo_root(path)
-	return shell({ "git", "-C", git_dir(path), "rev-parse", "--show-toplevel" })
-end
-
-local function current_branch(root)
-	if not root then
-		return nil
-	end
-	local branch = shell({ "git", "-C", root, "branch", "--show-current" })
-	if branch and branch ~= "" then
-		return branch
-	end
-	return shell({ "git", "-C", root, "rev-parse", "--short", "HEAD" })
-end
-
-local function safe_id(v)
-	return (v or "detached"):gsub("^/", ""):gsub("[/:\\]", "_")
-end
-
-local function scope_id(root, branch)
-	return safe_id(root) .. "-" .. safe_id(branch)
-end
-
-local function data_dir()
-	return vim.fn.stdpath("data") .. "/quickfix-notes"
-end
-
-local function legacy_data_dir()
-	return vim.fn.stdpath("data") .. "/reviewnotes"
-end
-
-local function file_for(root, branch, directory)
-	return (directory or data_dir()) .. "/" .. scope_id(root, branch) .. ".json"
-end
-
--- --- persistence ------------------------------------------------------------
-
----Reload notes for the current repo+branch. Returns true if scope changed.
-function M.switch_scope(root, branch)
-	root = root or M.repo_root()
-	branch = branch or current_branch(root)
-	if not root then
-		scope = nil
-		notes = {}
-		return true
-	end
-
-	if scope and scope.root == root and scope.branch == branch then
-		return false
-	end
-	scope = { root = root, branch = branch }
-
-	notes = {}
-	local file = file_for(root, branch)
-	if vim.fn.filereadable(file) == 0 then
-		file = file_for(root, branch, legacy_data_dir())
-	end
-	if vim.fn.filereadable(file) == 1 then
-		local ok, data = pcall(vim.fn.json_decode, table.concat(vim.fn.readfile(file), "\n"))
-		if ok and type(data) == "table" then
-			notes = data
-		end
-	end
-	return true
-end
+local notes = require("quickfix_notes")
+local lists = require("quickfix_notes.lists")
+local annotation = require("quickfix_notes.annotations")
+local location = require("quickfix_notes.location")
 
 function M.scope()
-	return scope and vim.deepcopy(scope) or nil
+	return notes.scope()
+end
+function M.repo_root(path)
+	return location.repo_root(path)
+end
+function M.switch_scope()
+	return false
 end
 
-local function persist()
-	if not scope then
-		return
-	end
-	vim.fn.mkdir(data_dir(), "p")
-	vim.fn.writefile({ vim.fn.json_encode(notes) }, file_for(scope.root, scope.branch))
-end
-
--- --- in-memory ops ---------------------------------------------------------
-
-local function new_id()
-	return table.concat({ os.time(), vim.fn.reltimefloat(vim.fn.reltime()), math.random(1000000) }, "-")
-end
-
-function M.add(loc, text)
-	local note = {
-		id = new_id(),
-		created_at = os.time(),
-		file = loc.file,
-		line = loc.line,
-		line_end = loc.line_end,
-		side = loc.side,
-		revision = loc.revision,
-		hash = loc.hash,
-		list_key = loc.list_key,
-		item_key = loc.item_key,
-		text = text,
-	}
-	notes[#notes + 1] = note
-	persist()
-	return note
-end
-
-function M.update(id, fields)
-	for _, n in ipairs(notes) do
-		if n.id == id then
-			for k, v in pairs(fields) do
-				n[k] = v
+local function records()
+	local out = {}
+	local owned = lists.find_owned()
+	if owned then
+		for _, item in ipairs(owned.items or {}) do
+			local note = annotation.get(item)
+			if note then
+				local loc = location.canonical(note.location)
+				out[#out + 1] =
+					vim.tbl_extend("force", vim.deepcopy(loc), { file = loc.path, text = note.text, id = note.id })
 			end
-			persist()
-			return n
 		end
 	end
-end
-
-function M.get(id)
-	for _, n in ipairs(notes) do
-		if n.id == id then
-			return n
-		end
-	end
-end
-
-function M.delete(id)
-	for i, n in ipairs(notes) do
-		if n.id == id then
-			table.remove(notes, i)
-			persist()
-			return true
-		end
-	end
-end
-
-function M.clear()
-	local count = #notes
-	notes = {}
-	persist()
-	return count
+	return out
 end
 
 function M.all()
-	return notes
+	return records()
 end
-
----Notes for a specific file in the current scope.
-function M.for_file(file)
-	return vim.tbl_filter(function(n)
-		return n.file == file
-	end, notes)
+function M.count()
+	return #records()
 end
-
----The note attached to the same (file, line, side, hash) as `loc`.
-function M.at(loc)
-	if loc.item_key then
-		for _, n in ipairs(notes) do
-			if n.item_key == loc.item_key then
-				return n
-			end
+function M.get(id)
+	for _, note in ipairs(records()) do
+		if note.id == id then
+			return note
 		end
+	end
+end
+function M.at(value)
+	for _, note in ipairs(records()) do
+		if location.equal(note, value) then
+			return note
+		end
+	end
+end
+
+function M.add(value, text)
+	local entry = lists.current()
+	if not entry or not entry.item then
+		return nil
+	end
+	local item = vim.deepcopy(entry.item)
+	local note, err = annotation.set(item, value, text)
+	if not note then
+		return nil, err
+	end
+	local items = vim.deepcopy(entry.items)
+	items[entry.index] = item
+	local ok, replace_err = lists.replace(
+		{ kind = entry.kind, id = entry.id, winid = entry.winid },
+		items,
+		entry.list.idx,
+		entry.changedtick
+	)
+	return ok and vim.tbl_extend("force", vim.deepcopy(value), { id = note.id, text = text }) or nil, replace_err
+end
+
+function M.update(id, fields)
+	local entry = lists.current()
+	if not entry then
 		return
 	end
-	for _, n in ipairs(notes) do
-		if n.file == loc.file and n.line == loc.line and n.side == loc.side and n.hash == loc.hash then
-			return n
+	local ok = lists.update_item({ kind = entry.kind, id = entry.id, winid = entry.winid }, entry.index, function(item)
+		local note = annotation.get(item)
+		if not note or note.id ~= id then
+			return nil
 		end
-	end
+		annotation.update(item, fields.text, note.location)
+		return true
+	end, id)
+	return ok and M.get(id)
 end
 
-function M.count()
-	return #notes
+function M.delete(id)
+	local entry = lists.current()
+	if not entry then
+		return false
+	end
+	return lists.update_item({ kind = entry.kind, id = entry.id, winid = entry.winid }, entry.index, function(item)
+		return annotation.remove(item)
+	end, id)
+end
+
+function M.clear()
+	local owned = lists.find_owned()
+	if not owned then
+		return 0
+	end
+	local count = #(owned.items or {})
+	lists.clear({ kind = "quickfix", id = owned.id })
+	return count
+end
+
+function M.for_file(file)
+	return vim.tbl_filter(function(note)
+		return note.file == file
+	end, records())
 end
 
 return M

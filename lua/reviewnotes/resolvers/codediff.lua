@@ -4,7 +4,7 @@ M.name = "codediff"
 M.priority = 100
 M.renderable = true
 
-local store = require("reviewnotes.store")
+local location = require("quickfix_notes.location")
 
 local function lifecycle()
 	local ok, mod = pcall(require, "codediff.ui.lifecycle")
@@ -72,8 +72,8 @@ function M.location(bufnr, winid)
 	end
 	local okg, ctx = pcall(lc.get_git_context, tab)
 	ctx = okg and ctx or {}
-	local root = ctx.git_root or store.repo_root(vim.api.nvim_buf_get_name(bufnr)) or vim.fn.getcwd()
-	root = store.repo_root(root) or root
+	local root = ctx.git_root or location.repo_root(vim.api.nvim_buf_get_name(bufnr)) or vim.fn.getcwd()
+	root = location.repo_root(root) or root
 
 	local is_original = bufnr == ob
 	local file = relpath(is_original and op or mp, root)
