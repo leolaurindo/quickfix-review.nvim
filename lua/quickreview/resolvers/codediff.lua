@@ -1,5 +1,5 @@
 local M = { name = "codediff", priority = 100, renderable = true }
-local location = require("quickfix_notes.location")
+local location = require("quickreview.location")
 
 local function lifecycle()
 	local ok, mod = pcall(require, "codediff.ui.lifecycle")
@@ -75,7 +75,7 @@ function M.anchor(note)
 end
 
 function M.on_attach(callback)
-	local group = vim.api.nvim_create_augroup("quickfix_notes_codediff", { clear = true })
+	local group = vim.api.nvim_create_augroup("quickreview_codediff", { clear = true })
 	vim.api.nvim_create_autocmd("User", {
 		group = group,
 		pattern = { "CodeDiffOpen", "CodeDiffFileSelect" },

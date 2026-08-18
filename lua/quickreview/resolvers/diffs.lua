@@ -1,5 +1,5 @@
 local M = { name = "diffs", priority = 80, renderable = false }
-local location = require("quickfix_notes.location")
+local location = require("quickreview.location")
 
 local function buf_var(bufnr, name)
 	local ok, value = pcall(vim.api.nvim_buf_get_var, bufnr, name)

@@ -1,11 +1,11 @@
 local ok, generic = pcall(require, "quickfix_export")
 if not ok then
-	error("QuickfixNotes requires quickfix-export.nvim (quickfix_export): " .. tostring(generic), 0)
+	error("QuickReview requires quickfix-export.nvim (quickfix_export): " .. tostring(generic), 0)
 end
 
-local lists = require("quickfix_notes.lists")
-local annotations = require("quickfix_notes.annotations")
-local location = require("quickfix_notes.location")
+local lists = require("quickreview.lists")
+local annotations = require("quickreview.annotations")
+local location = require("quickreview.location")
 
 local M = {}
 
@@ -28,7 +28,7 @@ function M.records(opts)
 	opts = opts or {}
 	local target = target_for(opts)
 	if not target then
-		return nil, "no QuickfixNotes list"
+		return nil, "no QuickReview list"
 	end
 	local generic_opts = vim.tbl_extend("force", opts, { list = target })
 	local selector = opts.text

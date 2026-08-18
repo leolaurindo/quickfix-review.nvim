@@ -15,4 +15,4 @@ vim.cmd("cd " .. vim.fn.fnameescape(root))
 vim.g.mapleader = " "
 
 require("quickfix_persist").setup()
-require("quickfix_notes").setup()
+	require("quickreview").setup()

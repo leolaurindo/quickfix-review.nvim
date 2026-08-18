@@ -5,7 +5,7 @@ M.defaults = {
 	send_opts = {},
 	actions = { mappings = { qf = false } },
 	export = {},
-	quickfix_title = "Quickfix Notes",
+	quickfix_title = "QuickReview",
 	persist_review_list = true,
 	scope_policy = "branch",
 	inline = true,

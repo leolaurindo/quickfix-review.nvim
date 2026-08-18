@@ -1,6 +1,6 @@
 local M = {}
 
-M.key = "quickfix_notes"
+M.key = "quickreview"
 M.version = 1
 
 local function now()

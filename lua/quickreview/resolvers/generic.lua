@@ -1,5 +1,5 @@
 local M = { name = "generic", priority = -10, renderable = false }
-local location = require("quickfix_notes.location")
+local location = require("quickreview.location")
 
 local function file_path(bufnr)
 	local name = vim.api.nvim_buf_get_name(bufnr)

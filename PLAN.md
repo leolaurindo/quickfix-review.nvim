@@ -1,7 +1,7 @@
-# QuickfixNotes Plan
+# QuickReview Plan
 
 The current runtime uses native quickfix and location lists as the source of
-truth. Notes live in `item.user_data.quickfix_notes`; producer fields remain
+truth. Notes live in `item.user_data.quickreview`; producer fields remain
 unchanged. Persistence is provided by `quickfix_persist` and is optional.
 
 The next architectural step is documented in [`SPINOFF.md`](SPINOFF.md):
@@ -9,7 +9,7 @@ The next architectural step is documented in [`SPINOFF.md`](SPINOFF.md):
 1. Extract native list actions and qf UI lifecycle into `quickfix-actions.nvim`.
 2. Extract generic formatting and destinations into `quickfix-export.nvim`.
 3. Keep `quickfix-persist.nvim` note-agnostic.
-4. Keep annotations, resolvers, marks, owned review lists, and note-aware UI in `quickfix-notes.nvim`.
+4. Keep annotations, resolvers, marks, owned review lists, and note-aware UI in `quickreview.nvim`.
 
 ## Repository And Test Layout
 
@@ -19,12 +19,12 @@ Each plugin lives in an independent repository under `~/projects`:
 ~/projects/quickfix-actions.nvim
 ~/projects/quickfix-export.nvim
 ~/projects/quickfix-persist.nvim
-~/projects/quickfix-notes.nvim
+~/projects/reviewnotes.nvim
 ```
 
 There is no monorepo or aggregate installable plugin. Standalone tests add only
 the repository under test and its required dependencies to `runtimepath`.
-QuickfixNotes integration tests add the sibling Actions, Export, and optional
+QuickReview integration tests add the sibling Actions, Export, and optional
 Persist paths directly. Test setup should accept environment-variable path
 overrides and otherwise default to sibling directories, so CI can check out the
 repositories anywhere without hard-coded home paths. Use
@@ -35,7 +35,7 @@ those overrides.
 
 Plugins integrate through Lua modules, not Ex commands. Commands are thin,
 user-facing conveniences which parse command arguments, call the same Lua API,
-and report errors. QuickfixNotes therefore calls `require("quickfix_actions")`
+and report errors. QuickReview therefore calls `require("quickfix_actions")`
 and `require("quickfix_export")` directly. User mappings may call either a
 command or Lua API.
 
@@ -73,7 +73,7 @@ Export produces ordered, JSON-safe records with this stable generic shape:
 ```
 
 Optional native values remain `nil`; the record does not contain raw native
-items or QuickfixNotes IDs. This keeps JSON stable and note-agnostic. Export
+items or QuickReview IDs. This keeps JSON stable and note-agnostic. Export
 continues to preserve native order, resolve valid buffer names, make paths
 relative to `root`, skip context rows by default, and report unresolved paths
 unless `strict = false`.
@@ -86,7 +86,7 @@ text = function(item, default_text)
 end
 ```
 
-QuickfixNotes adapts its note-aware public selector without exposing notes to
+QuickReview adapts its note-aware public selector without exposing notes to
 Export:
 
 ```lua
@@ -97,15 +97,15 @@ generic_opts.text = function(item, default_text)
 end
 ```
 
-Thus `quickfix-export` never requires or inspects QuickfixNotes, while the
-existing QuickfixNotes callback remains useful.
+Thus `quickfix-export` never requires or inspects QuickReview, while the
+existing QuickReview callback remains useful.
 
-Actions and Export are required QuickfixNotes dependencies. QuickfixNotes does
+Actions and Export are required QuickReview dependencies. QuickReview does
 not retain duplicate fallback implementations; setup reports a clear missing
 dependency error. Persist remains optional.
 
 Generic commands use `QuickfixActions...` and `QuickfixExport...` names. Note
-commands remain under `QuickfixNotes...`. Exact command arguments and mapping
+commands remain under `QuickReview...`. Exact command arguments and mapping
 defaults are frozen by characterization tests before moving them; commands are
 not an inter-plugin compatibility API. Mapping installation must be
 configurable so Actions can coexist with Quicker.
@@ -125,11 +125,11 @@ configurable so Actions can coexist with Quicker.
 
 ## Extraction Order
 
-1. Add characterization tests that freeze current QuickfixNotes and persistence behavior.
+1. Add characterization tests that freeze current QuickReview and persistence behavior.
 2. Extract qf UI lifecycle, target resolution, list reads, current-entry lookup, replacement, deletion, and clearing into Actions.
 3. Extract normalized export records, formatters, and destinations into Export.
 4. Add standalone tests for quickfix lists, location lists, stale IDs, ordering, deletion, metadata preservation, UI lifecycle, and export edge cases.
-5. Make QuickfixNotes consume the required Actions and Export Lua APIs without changing note behavior.
+5. Make QuickReview consume the required Actions and Export Lua APIs without changing note behavior.
 6. Test on Neovim 0.10 and current stable Neovim, against a recorded Quicker revision, and with both the presence and absence of optional Persist.
 7. Remove duplicated generic code after all standalone and cross-repository suites pass.
 

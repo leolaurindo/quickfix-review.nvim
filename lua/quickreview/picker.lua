@@ -1,7 +1,7 @@
 local M = {}
-local lists = require("quickfix_notes.lists")
-local annotations = require("quickfix_notes.annotations")
-local location = require("quickfix_notes.location")
+local lists = require("quickreview.lists")
+local annotations = require("quickreview.annotations")
+local location = require("quickreview.location")
 
 function M.entries(opts)
 	opts = opts or {}
@@ -12,7 +12,7 @@ function M.entries(opts)
 	else
 		local owned = lists.find_owned(opts.scope_id)
 		if not owned then
-			return nil, "no QuickfixNotes list"
+			return nil, "no QuickReview list"
 		end
 		value, err, resolved = lists.read({ kind = "quickfix", id = owned.id })
 	end

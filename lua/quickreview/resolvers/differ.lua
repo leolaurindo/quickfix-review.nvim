@@ -1,5 +1,5 @@
 local M = { name = "differ", priority = 90, renderable = false }
-local location = require("quickfix_notes.location")
+local location = require("quickreview.location")
 
 local function view_for(bufnr)
 	local ok, differ = pcall(require, "differ.view")

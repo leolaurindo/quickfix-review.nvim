@@ -1,6 +1,6 @@
 local ok, sender = pcall(require, "quickfix_export.sender")
 if not ok then
-	error("QuickfixNotes requires quickfix-export.nvim for destinations: " .. tostring(sender), 0)
+	error("QuickReview requires quickfix-export.nvim for destinations: " .. tostring(sender), 0)
 end
 
 return {

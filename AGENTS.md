@@ -1,7 +1,7 @@
 # Project Context
 
-`quickfix-notes.nvim` annotates native Neovim quickfix and location-list items.
-Notes live in `item.user_data.quickfix_notes`; native list data remains the
+`quickreview.nvim` annotates native Neovim quickfix and location-list items.
+Notes live in `item.user_data.quickreview`; native list data remains the
 source of truth.
 
 ## Dependencies

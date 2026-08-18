@@ -16,7 +16,7 @@ function M.title(loc)
 	if loc.revision then
 		parts[#parts + 1] = tostring(loc.revision):sub(1, 7)
 	end
-	return #parts > 0 and table.concat(parts, " | ") or "Quickfix Notes"
+	return #parts > 0 and table.concat(parts, " | ") or "QuickReview"
 end
 
 function M.note_input(opts, callback)
@@ -69,9 +69,9 @@ function M.note_input(opts, callback)
 	end
 	vim.keymap.set({ "n", "i" }, "<C-s>", save, { buffer = buf, nowait = true })
 	vim.keymap.set("n", "q", save, { buffer = buf, nowait = true })
-	vim.api.nvim_buf_create_user_command(buf, "QuickfixNotesQuit", save, { nargs = 0 })
+	vim.api.nvim_buf_create_user_command(buf, "QuickReviewQuit", save, { nargs = 0 })
 	vim.api.nvim_set_current_win(win)
-	vim.cmd("cnoreabbrev <expr> <buffer> q getcmdtype() ==# ':' && getcmdline() ==# 'q' ? 'QuickfixNotesQuit' : 'q'")
+	vim.cmd("cnoreabbrev <expr> <buffer> q getcmdtype() ==# ':' && getcmdline() ==# 'q' ? 'QuickReviewQuit' : 'q'")
 	vim.cmd("startinsert")
 end
 

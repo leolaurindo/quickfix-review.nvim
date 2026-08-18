@@ -3,24 +3,24 @@ local M = {}
 local function require_dependency(name, plugin)
 	local ok, module = pcall(require, name)
 	if not ok then
-		error(("QuickfixNotes requires %s (%s): %s"):format(plugin, name, tostring(module)), 0)
+		error(("QuickReview requires %s (%s): %s"):format(plugin, name, tostring(module)), 0)
 	end
 	return module
 end
 
 local actions = require_dependency("quickfix_actions", "quickfix-actions.nvim")
 local generic_export = require_dependency("quickfix_export", "quickfix-export.nvim")
-local config = require("quickfix_notes.config")
-local scope = require("quickfix_notes.scope")
-local location = require("quickfix_notes.location")
-local annotations = require("quickfix_notes.annotations")
-local lists = require("quickfix_notes.lists")
-local resolver = require("quickfix_notes.resolver")
-local ui = require("quickfix_notes.ui")
-local marks = require("quickfix_notes.marks")
-local picker = require("quickfix_notes.picker")
-local exporter = require("quickfix_notes.export")
-local sender = require("quickfix_notes.sender")
+local config = require("quickreview.config")
+local scope = require("quickreview.scope")
+local location = require("quickreview.location")
+local annotations = require("quickreview.annotations")
+local lists = require("quickreview.lists")
+local resolver = require("quickreview.resolver")
+local ui = require("quickreview.ui")
+local marks = require("quickreview.marks")
+local picker = require("quickreview.picker")
+local exporter = require("quickreview.export")
+local sender = require("quickreview.sender")
 
 local current_scope
 local review_watch
@@ -28,7 +28,7 @@ local setup_done = false
 local hover_tick = 0
 
 local function notify(message, level)
-	vim.notify(message, level, { title = "QuickfixNotes" })
+	vim.notify(message, level, { title = "QuickReview" })
 end
 
 local function persist_module()
@@ -54,7 +54,7 @@ local function persist_review()
 		review_watch = nil
 	end
 	local handle, err = persist.save({
-		namespace = "quickfix-notes",
+		namespace = "quickreview",
 		name = "review",
 		scope = current_scope,
 		target = { kind = "quickfix", id = owned.id },
@@ -79,7 +79,7 @@ local function restore_review()
 	if not persist then
 		return
 	end
-	local snapshot, err = persist.load({ namespace = "quickfix-notes", name = "review", scope = current_scope })
+	local snapshot, err = persist.load({ namespace = "quickreview", name = "review", scope = current_scope })
 	if not snapshot then
 		if err then
 			notify("could not restore review list: " .. err, vim.log.levels.WARN)
@@ -199,7 +199,7 @@ local function add_source(value, bufnr)
 		end
 		local latest, _, latest_target = lists.read(target)
 		if not latest then
-			notify("QuickfixNotes list disappeared", vim.log.levels.WARN)
+			notify("QuickReview list disappeared", vim.log.levels.WARN)
 			return
 		end
 		if existing then
@@ -260,7 +260,7 @@ local function owned_copy(entry, note)
 		item.end_col = nil
 	end
 	item.user_data = type(item.user_data) == "table" and item.user_data or {}
-	item.user_data.quickfix_notes = vim.deepcopy(note)
+	item.user_data.quickreview = vim.deepcopy(note)
 	return item
 end
 
@@ -268,7 +268,7 @@ local function sync_owned_copy(entry, note)
 	local _, target = lists.ensure_owned({ title = config.get().quickfix_title }, scope_id())
 	local latest, _, latest_target = lists.read(target)
 	if not latest then
-		return nil, "Quickfix Notes list disappeared"
+		return nil, "QuickReview list disappeared"
 	end
 	local copy = owned_copy(entry, note)
 	local found
@@ -315,7 +315,7 @@ local function annotate_list_entry(edit_only)
 	end
 	local note = annotations.get(entry.item)
 	if edit_only and not note then
-		notify("no QuickfixNotes annotation on this entry", vim.log.levels.INFO)
+		notify("no QuickReview annotation on this entry", vim.log.levels.INFO)
 		return
 	end
 	if not note and entry.item.valid ~= 1 and not entry.item.filename and not entry.item.bufnr then
@@ -373,8 +373,8 @@ end
 local function qf_entry_is_owned(entry)
 	return entry.kind == "quickfix"
 		and type(entry.list.context) == "table"
-		and type(entry.list.context.quickfix_notes) == "table"
-		and entry.list.context.quickfix_notes.role == "notes"
+		and type(entry.list.context.quickreview) == "table"
+		and entry.list.context.quickreview.role == "notes"
 end
 
 local function delete_qf_entry()
@@ -459,7 +459,7 @@ function M.delete()
 		end
 		local note = annotations.get(entry.item)
 		if not note then
-			notify("no QuickfixNotes annotation here", vim.log.levels.INFO)
+			notify("no QuickReview annotation here", vim.log.levels.INFO)
 			return
 		end
 		local ok, err
@@ -596,8 +596,8 @@ function M.clear_annotations(opts)
 		return false, err
 	end
 	local owned = type(value.context) == "table"
-		and type(value.context.quickfix_notes) == "table"
-		and value.context.quickfix_notes.role == "notes"
+		and type(value.context.quickreview) == "table"
+		and value.context.quickreview.role == "notes"
 	if owned and not (opts and opts.annotations_only) then
 		local ok, clear_err = lists.clear(resolved)
 		if ok then
@@ -652,7 +652,7 @@ function M.save_list(name, opts)
 		return nil, "no list selected"
 	end
 	local handle, err = persist.save({
-		namespace = "quickfix-notes",
+		namespace = "quickreview",
 		name = name,
 		scope = current_scope,
 		target = target,
@@ -670,7 +670,7 @@ function M.load_list(name, opts)
 		return nil, "quickfix_persist is required"
 	end
 	refresh_scope()
-	local snapshot, err = persist.load({ namespace = "quickfix-notes", name = name, scope = current_scope })
+	local snapshot, err = persist.load({ namespace = "quickreview", name = name, scope = current_scope })
 	if not snapshot then
 		notify(err, vim.log.levels.ERROR)
 		return nil, err
@@ -683,7 +683,7 @@ function M.load_list(name, opts)
 		return nil, restore_err
 	end
 	if opts == nil or opts.watch ~= false then
-		persist.watch({ namespace = "quickfix-notes", name = name, scope = current_scope, target = restored })
+		persist.watch({ namespace = "quickreview", name = name, scope = current_scope, target = restored })
 	end
 	return restored
 end
@@ -710,40 +710,40 @@ local function command(name, callback, opts)
 end
 
 local function install_commands()
-	command("QuickfixNotesAdd", function(o)
+	command("QuickReviewAdd", function(o)
 		if o.range > 0 then
 			M.note_range(o.line1, o.line2)
 		else
 			M.add()
 		end
-	end, { range = true, desc = "Add a QuickfixNotes annotation" })
-	command("QuickfixNotesEdit", M.edit, { desc = "Edit a QuickfixNotes annotation" })
-	command("QuickfixNotesDelete", M.delete, { desc = "Delete a QuickfixNotes annotation" })
-	command("QuickfixNotesList", M.open_list, { desc = "Open the owned QuickfixNotes list" })
-	command("QuickfixNotesPick", function()
+	end, { range = true, desc = "Add a QuickReview annotation" })
+	command("QuickReviewEdit", M.edit, { desc = "Edit a QuickReview annotation" })
+	command("QuickReviewDelete", M.delete, { desc = "Delete a QuickReview annotation" })
+	command("QuickReviewList", M.open_list, { desc = "Open the owned QuickReview list" })
+	command("QuickReviewPick", function()
 		M.pick({ source = "owned", scope_id = scope_id() })
-	end, { desc = "Pick a QuickfixNotes annotation" })
-	command("QuickfixNotesPickCurrent", function()
+	end, { desc = "Pick a QuickReview annotation" })
+	command("QuickReviewPickCurrent", function()
 		M.pick({ source = "current" })
 	end, { desc = "Pick an annotation in the current list" })
-	command("QuickfixNotesExport", M.export, { desc = "Export the selected list" })
-	command("QuickfixNotesExportList", M.export_qf, { desc = "Export the current native list" })
-	command("QuickfixNotesExportAndClear", M.export_and_clear, { desc = "Export then clear safely" })
-	command("QuickfixNotesClear", M.clear_annotations, { desc = "Clear annotations or owned entries" })
-	command("QuickfixNotesSaveList", function(o)
+	command("QuickReviewExport", M.export, { desc = "Export the selected list" })
+	command("QuickReviewExportList", M.export_qf, { desc = "Export the current native list" })
+	command("QuickReviewExportAndClear", M.export_and_clear, { desc = "Export then clear safely" })
+	command("QuickReviewClear", M.clear_annotations, { desc = "Clear annotations or owned entries" })
+	command("QuickReviewSaveList", function(o)
 		M.save_list(o.args)
 	end, { nargs = 1, desc = "Save the selected native list" })
-	command("QuickfixNotesLoadList", function(o)
+	command("QuickReviewLoadList", function(o)
 		M.load_list(o.args)
 	end, { nargs = 1, desc = "Load a named native list" })
-	command("QuickfixNotesHide", marks.hide, { desc = "Hide QuickfixNotes marks" })
-	command("QuickfixNotesShow", marks.show, { desc = "Show QuickfixNotes marks" })
-	command("QuickfixNotesHover", function()
+	command("QuickReviewHide", marks.hide, { desc = "Hide QuickReview marks" })
+	command("QuickReviewShow", marks.show, { desc = "Show QuickReview marks" })
+	command("QuickReviewHover", function()
 		marks.hover_qf(vim.api.nvim_get_current_buf())
 	end, { desc = "Show the note at the current quickfix row" })
-	command("QuickfixNotesNext", M.next, { desc = "Pick the next QuickfixNotes annotation" })
-	command("QuickfixNotesPrev", M.prev, { desc = "Pick the previous QuickfixNotes annotation" })
-	command("QuickfixNotesSend", M.send, { desc = "Export through the configured destination" })
+	command("QuickReviewNext", M.next, { desc = "Pick the next QuickReview annotation" })
+	command("QuickReviewPrev", M.prev, { desc = "Pick the previous QuickReview annotation" })
+	command("QuickReviewSend", M.send, { desc = "Export through the configured destination" })
 end
 
 local function actions_qf_mapping(lhs)
@@ -761,14 +761,14 @@ function M.setup(opts)
 	end
 	actions.setup(action_opts)
 	generic_export.setup(config.get().export or {})
-	resolver.register(require("quickfix_notes.resolvers.codediff"))
-	resolver.register(require("quickfix_notes.resolvers.diffview"))
-	resolver.register(require("quickfix_notes.resolvers.differ"))
-	resolver.register(require("quickfix_notes.resolvers.neogit"))
-	resolver.register(require("quickfix_notes.resolvers.diffs"))
-	resolver.register(require("quickfix_notes.resolvers.native"))
-	resolver.register(require("quickfix_notes.resolvers.normal"))
-	resolver.register(require("quickfix_notes.resolvers.generic"))
+	resolver.register(require("quickreview.resolvers.codediff"))
+	resolver.register(require("quickreview.resolvers.diffview"))
+	resolver.register(require("quickreview.resolvers.differ"))
+	resolver.register(require("quickreview.resolvers.neogit"))
+	resolver.register(require("quickreview.resolvers.diffs"))
+	resolver.register(require("quickreview.resolvers.native"))
+	resolver.register(require("quickreview.resolvers.normal"))
+	resolver.register(require("quickreview.resolvers.generic"))
 	sender.set_default(config.get().send)
 	marks.setup(config.get())
 	refresh_scope(true)
@@ -777,7 +777,7 @@ function M.setup(opts)
 		return M
 	end
 	setup_done = true
-	local group = vim.api.nvim_create_augroup("QuickfixNotes", { clear = true })
+	local group = vim.api.nvim_create_augroup("QuickReview", { clear = true })
 	vim.api.nvim_create_autocmd({ "BufEnter", "BufWinEnter" }, {
 		group = group,
 		callback = function(e)
@@ -832,12 +832,12 @@ function M.setup(opts)
 			"n",
 			config.get().keys.note,
 			annotate_list_entry,
-			{ buffer = buf, desc = "Add or edit QuickfixNotes annotation" }
+			{ buffer = buf, desc = "Add or edit QuickReview annotation" }
 		)
-		vim.keymap.set("n", "a", annotate_list_entry, { buffer = buf, desc = "Add QuickfixNotes annotation" })
+		vim.keymap.set("n", "a", annotate_list_entry, { buffer = buf, desc = "Add QuickReview annotation" })
 		vim.keymap.set("n", "e", function()
 			annotate_list_entry(true)
-		end, { buffer = buf, desc = "Edit QuickfixNotes annotation" })
+		end, { buffer = buf, desc = "Edit QuickReview annotation" })
 	end
 	vim.api.nvim_create_autocmd("FileType", {
 		group = group,
@@ -857,12 +857,12 @@ function M.setup(opts)
 	install_commands()
 	local keys = config.get().keys
 	for _, mode in ipairs({ "n", "v" }) do
-		vim.keymap.set(mode, keys.note, M.add, { desc = "QuickfixNotesAdd" })
-		vim.keymap.set(mode, keys.export, M.export, { desc = "QuickfixNotesExport" })
-		vim.keymap.set(mode, keys.export_and_clear, M.export_and_clear, { desc = "QuickfixNotesExportAndClear" })
+		vim.keymap.set(mode, keys.note, M.add, { desc = "QuickReviewAdd" })
+		vim.keymap.set(mode, keys.export, M.export, { desc = "QuickReviewExport" })
+		vim.keymap.set(mode, keys.export_and_clear, M.export_and_clear, { desc = "QuickReviewExportAndClear" })
 	end
-	vim.keymap.set("n", keys.clear, M.clear_annotations, { desc = "QuickfixNotesClear" })
-	vim.keymap.set("n", keys.list, M.open_list, { desc = "QuickfixNotesList" })
+	vim.keymap.set("n", keys.clear, M.clear_annotations, { desc = "QuickReviewClear" })
+	vim.keymap.set("n", keys.list, M.open_list, { desc = "QuickReviewList" })
 	return M
 end
 
