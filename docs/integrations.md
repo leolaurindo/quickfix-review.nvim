@@ -3,7 +3,9 @@
 QuickfixNotes has two separate extension surfaces:
 
 - `quickfix_persist` stores native quickfix and location-list snapshots and knows nothing about notes.
-- `quickfix_notes` resolves source locations, annotates list items, maintains the owned review list, and exports records.
+- `quickfix_actions` owns generic native list access and mutations.
+- `quickfix_export` normalizes native lists, formats records, and sends destinations.
+- `quickfix_notes` resolves source locations, annotates list items, maintains the owned review list, and supplies note-aware export text.
 
 Do not write a second note database or identify entries by rendered qf text. Native list IDs and `user_data.quickfix_notes.id` are the identities.
 
@@ -45,7 +47,7 @@ Register a resolver during setup or from another plugin:
 require("quickfix_notes.resolver").register(require("my_resolver"))
 ```
 
-The existing adapters cover normal buffers, native diffs, Diffview+, CodeDiff, Differ, diffs.nvim, and Neogit. Historical-side navigation falls back to the stored working-tree path when the original diff UI cannot be recreated.
+The existing adapters cover normal buffers, native diffs, Diffview+, CodeDiff, Differ, diffs.nvim, and Neogit. An unknown URI buffer is also supported when its decoded URI contains an existing absolute file path; it receives a file-level note because its rows cannot be mapped safely to source lines. Historical-side navigation falls back to the stored working-tree path when the original diff UI cannot be recreated.
 
 For Diffview+, install `dlyongemallo/diffview-plus.nvim` and use its normal `:Diffview...` commands. QuickfixNotes discovers the active Diffview through `diffview.lib`, records old/new side and revision metadata, and rejects ranges in inline layouts where visible rows do not map directly to source rows.
 
@@ -71,7 +73,9 @@ The export pipeline is:
 native list -> normalized records -> formatter -> destination
 ```
 
-Normalized records contain `path`, `line`, `line_end`, `text`, `id`, and list `kind`.
+Normalized records contain `index`, `path`, `line`, `line_end`, `col`, `end_col`,
+`text`, `type`, `valid`, and list `kind`. Unavailable fields are omitted. They
+do not contain raw native items or QuickfixNotes note IDs.
 
 The native `item.text` remains the producer message. QuickfixNotes stores the
 full note in `user_data.quickfix_notes.text`; it does not copy or concatenate
@@ -86,6 +90,14 @@ require("quickfix_notes").export({
   end,
 })
 ```
+
+The underlying generic Export selector receives only `(item, default_text)`;
+QuickfixNotes supplies the `note` argument in its wrapper.
+
+QuickfixNotes also applies a note's canonical source path and range to its own
+records after generic normalization. This preserves diff/source resolver
+locations without exposing note metadata to quickfix-export or mutating the
+native list.
 
 This callback affects the normalized export record only; it does not mutate the
 producer item or its qf display.
@@ -110,7 +122,8 @@ require("quickfix_notes").export({
 })
 ```
 
-Built-in destinations are clipboard, file, and Sidekick. A destination exposes:
+Built-in Export destinations are clipboard, file, and optional Sidekick. A
+destination exposes:
 
 ```lua
 return {
@@ -128,6 +141,10 @@ local sender = require("quickfix_notes.sender")
 sender.register(require("my_destination"))
 sender.set_default("my_destination")
 ```
+
+Other plugins call `require("quickfix_actions")` and
+`require("quickfix_export")` directly. `:QuickfixActions...` and
+`:QuickfixExport...` are thin user-facing command wrappers.
 
 An explicit `false, err` return is treated as failure, so `ExportAndClear` will not clear after a rejected destination.
 

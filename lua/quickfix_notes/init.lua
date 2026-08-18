@@ -1,5 +1,15 @@
 local M = {}
 
+local function require_dependency(name, plugin)
+	local ok, module = pcall(require, name)
+	if not ok then
+		error(("QuickfixNotes requires %s (%s): %s"):format(plugin, name, tostring(module)), 0)
+	end
+	return module
+end
+
+local actions = require_dependency("quickfix_actions", "quickfix-actions.nvim")
+local generic_export = require_dependency("quickfix_export", "quickfix-export.nvim")
 local config = require("quickfix_notes.config")
 local scope = require("quickfix_notes.scope")
 local location = require("quickfix_notes.location")
@@ -373,12 +383,12 @@ local function delete_qf_entry()
 		notify("empty quickfix row", vim.log.levels.WARN)
 		return
 	end
-	local items = vim.deepcopy(entry.items)
 	local note = annotations.get(entry.item)
-	table.remove(items, entry.index)
-	local index = math.min(entry.list.idx or 1, #items)
-	local ok, err =
-		lists.replace({ kind = entry.kind, id = entry.id, winid = entry.winid }, items, index, entry.changedtick)
+	local ok, err = lists.delete(
+		{ kind = entry.kind, id = entry.id, winid = entry.winid },
+		entry.index,
+		entry.changedtick
+	)
 	if not ok then
 		notify(err, vim.log.levels.WARN)
 		return
@@ -454,12 +464,9 @@ function M.delete()
 		end
 		local ok, err
 		if qf_entry_is_owned(entry) then
-			local items = vim.deepcopy(entry.items)
-			table.remove(items, entry.index)
-			ok, err = lists.replace(
+			ok, err = lists.delete(
 				{ kind = entry.kind, id = entry.id, winid = entry.winid },
-				items,
-				math.min(entry.list.idx or 1, #items),
+				entry.index,
 				entry.changedtick
 			)
 		else
@@ -570,12 +577,12 @@ function M.export(opts)
 		notify(format_err, vim.log.levels.ERROR)
 		return false, format_err
 	end
-	local ok, result = sender.send(payload, opts.destination_opts or config.get().send_opts, opts.destination)
+	local ok, result = generic_export.send(payload, opts.destination_opts or config.get().send_opts, opts.destination)
 	if not ok then
 		notify("export failed: " .. tostring(result), vim.log.levels.ERROR)
 		return false, result
 	end
-	notify(("exported %d entries via %s"):format(#records, sender.active()), vim.log.levels.INFO)
+	notify(("exported %d entries via %s"):format(#records, generic_export.active_destination()), vim.log.levels.INFO)
 	return true, result, details
 end
 
@@ -593,6 +600,9 @@ function M.clear_annotations(opts)
 		and value.context.quickfix_notes.role == "notes"
 	if owned and not (opts and opts.annotations_only) then
 		local ok, clear_err = lists.clear(resolved)
+		if ok then
+			marks.refresh()
+		end
 		persist_review()
 		return ok, clear_err
 	end
@@ -610,6 +620,7 @@ function M.clear_annotations(opts)
 		for _, id in ipairs(ids) do
 			remove_owned_copy(id)
 		end
+		marks.refresh()
 	end
 	persist_review()
 	return ok, clear_err
@@ -735,8 +746,21 @@ local function install_commands()
 	command("QuickfixNotesSend", M.send, { desc = "Export through the configured destination" })
 end
 
+local function actions_qf_mapping(lhs)
+	local action_opts = config.get().actions
+	local mappings = action_opts and action_opts ~= false and action_opts.mappings
+	local qf = mappings and mappings.qf
+	return type(qf) == "table" and qf[lhs] ~= false
+end
+
 function M.setup(opts)
 	config.setup(opts)
+	local action_opts = config.get().actions
+	if action_opts == false then
+		action_opts = { mappings = { qf = false } }
+	end
+	actions.setup(action_opts)
+	generic_export.setup(config.get().export or {})
 	resolver.register(require("quickfix_notes.resolvers.codediff"))
 	resolver.register(require("quickfix_notes.resolvers.diffview"))
 	resolver.register(require("quickfix_notes.resolvers.differ"))
@@ -744,9 +768,7 @@ function M.setup(opts)
 	resolver.register(require("quickfix_notes.resolvers.diffs"))
 	resolver.register(require("quickfix_notes.resolvers.native"))
 	resolver.register(require("quickfix_notes.resolvers.normal"))
-	sender.register(require("quickfix_notes.destinations.clipboard"))
-	sender.register(require("quickfix_notes.destinations.file"))
-	sender.register(require("quickfix_notes.destinations.sidekick"))
+	resolver.register(require("quickfix_notes.resolvers.generic"))
 	sender.set_default(config.get().send)
 	marks.setup(config.get())
 	refresh_scope(true)
@@ -800,8 +822,12 @@ function M.setup(opts)
 		end,
 	})
 	local function setup_qf_buffer(buf)
-		vim.keymap.set("n", "<CR>", qf_jump, { buffer = buf, nowait = true, desc = "Jump to quickfix location" })
-		vim.keymap.set("n", "dd", delete_qf_entry, { buffer = buf, nowait = true, desc = "Delete quickfix entry" })
+		if not actions_qf_mapping("<CR>") then
+			vim.keymap.set("n", "<CR>", qf_jump, { buffer = buf, nowait = true, desc = "Jump to quickfix location" })
+		end
+		if not actions_qf_mapping("dd") then
+			vim.keymap.set("n", "dd", delete_qf_entry, { buffer = buf, nowait = true, desc = "Delete quickfix entry" })
+		end
 		vim.keymap.set(
 			"n",
 			config.get().keys.note,

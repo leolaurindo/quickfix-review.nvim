@@ -3,6 +3,8 @@ local M = {}
 M.defaults = {
 	send = "clipboard",
 	send_opts = {},
+	actions = { mappings = { qf = false } },
+	export = {},
 	quickfix_title = "Quickfix Notes",
 	persist_review_list = true,
 	scope_policy = "branch",

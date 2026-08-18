@@ -86,9 +86,14 @@ function M.pick(opts)
 			return Snacks.picker.preview.file(ctx)
 		end
 		local source = vim.fn.readfile(path)
-		local header = { "Quickfix Note", "-------------" }
-		vim.list_extend(header, vim.split(ctx.item.text or "", "\n", { plain = true }))
-		header[#header + 1] = ""
+		local header = vim.split(ctx.item.text or "", "\n", { plain = true })
+		header[1] = "[NOTE] " .. header[1]
+		for i = 2, #header do
+			header[i] = "       " .. header[i]
+		end
+		local info = vim.fn.getwininfo(ctx.win)[1]
+		local width = info and vim.api.nvim_win_get_width(ctx.win) - info.textoff or 13
+		header[#header + 1] = string.rep("─", width)
 		vim.list_extend(header, source)
 		ctx.preview:reset()
 		ctx.preview:set_title(ctx.item.preview_title or vim.fn.fnamemodify(path, ":t"))

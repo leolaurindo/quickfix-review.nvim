@@ -2,13 +2,20 @@
 
 Annotate Neovim quickfix and location-list entries, keep a consolidated
 branch-scoped review list, and export any native list.
-Requires Neovim 0.10 or newer.
+Requires Neovim 0.10 or newer, plus
+[quickfix-actions.nvim](https://github.com/leolaurindo/quickfix-actions.nvim)
+and [quickfix-export.nvim](https://github.com/leolaurindo/quickfix-export.nvim).
+[quickfix-persist.nvim](https://github.com/leolaurindo/quickfix-persist.nvim)
+is optional.
 
 ```lua
 require("quickfix_notes").setup({
   send = "clipboard",
 })
 ```
+
+Plugins call the sibling APIs directly through Lua modules. Commands are
+user-facing wrappers, not inter-plugin APIs.
 
 ## Commands
 
@@ -110,10 +117,25 @@ require("quickfix_notes").export({
 })
 ```
 
-Built-in destinations are `clipboard`, `file`, and optional `sidekick`.
+Built-in destinations are `clipboard`, `file`, and optional `sidekick` from
+quickfix-export.nvim.
 
 See [`docs/integrations.md`](docs/integrations.md) for resolver, picker,
 formatter, destination, and quickfix integration contracts.
+
+## Local Manual Testing
+
+From this repository, launch Neovim with all four sibling repositories on the
+runtime path:
+
+```sh
+nvim -u test/manual_init.lua
+```
+
+This loads `quickfix-persist.nvim`, `quickfix-export.nvim`,
+`quickfix-actions.nvim`, and QuickfixNotes from `~/projects`. For another
+checkout location, use the `QUICKFIX_ACTIONS_PATH`, `QUICKFIX_EXPORT_PATH`, and
+`QUICKFIX_PERSIST_PATH` variables with the headless test scripts.
 
 ## Persistence
 
@@ -128,4 +150,5 @@ Run tests with:
 
 ```sh
 nvim --headless -u NONE -l test/run.lua
+nvim --headless -u NONE -l test/run_with_persist.lua
 ```
