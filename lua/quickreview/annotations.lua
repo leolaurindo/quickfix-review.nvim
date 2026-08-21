@@ -23,9 +23,9 @@ function M.location(note)
 	return type(note) == "table" and type(note.location) == "table" and note.location or note
 end
 
-function M.create(location, text, id)
+function M.create(location, text, id, metadata)
 	local stamp = now()
-	return {
+	local note = {
 		version = M.version,
 		id = id and tostring(id) or new_id(),
 		text = text or "",
@@ -33,27 +33,36 @@ function M.create(location, text, id)
 		updated_at = stamp,
 		location = vim.deepcopy(location),
 	}
+	if metadata ~= nil then
+		note.metadata = vim.deepcopy(metadata)
+	end
+	return note
 end
 
-function M.set(item, location, text, existing)
+function M.set(item, location, text, existing, metadata)
 	if type(item.user_data) == "nil" then
 		item.user_data = {}
 	elseif type(item.user_data) ~= "table" then
 		return nil, "cannot annotate an item with non-table user_data"
 	end
 	local old = M.get(item)
-	local note = M.create(location, text, existing and existing.id or old and old.id)
+	local note = M.create(
+		location,
+		text,
+		existing and existing.id or old and old.id,
+		metadata == nil and old and old.metadata or metadata
+	)
 	note.created_at = existing and existing.created_at or old and old.created_at or note.created_at
 	item.user_data[M.key] = note
 	return note
 end
 
-function M.update(item, text, location)
+function M.update(item, text, location, metadata)
 	local old = M.get(item)
 	if not old then
 		return nil, "item is not annotated"
 	end
-	return M.set(item, location or old.location, text, old)
+	return M.set(item, location or old.location, text, old, metadata)
 end
 
 function M.remove(item)

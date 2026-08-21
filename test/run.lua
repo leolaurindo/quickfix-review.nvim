@@ -22,6 +22,7 @@ local resolver = require("quickreview.resolver")
 
 notes.setup({ persist_review_list = false })
 assert(vim.fn.exists(":QuickReviewAdd") == 2)
+assert(vim.fn.exists(":QuickReviewImport") == 2)
 assert(vim.fn.exists(":QuickReviewExport") == 2)
 assert(vim.fn.exists(":QuickfixActionsDelete") == 2)
 assert(vim.fn.exists(":QuickfixExport") == 2)
@@ -192,6 +193,83 @@ assert(uri_note)
 local invalid_buf = vim.api.nvim_create_buf(false, true)
 vim.api.nvim_buf_set_name(invalid_buf, "editor:///does/not/exist.lua")
 assert(not resolver.location(invalid_buf))
+
+local agent_payload = {
+	version = 1,
+	source = "test-agent",
+	findings = {
+		{
+			id = "agent-001",
+			path = "README.md",
+			line = 12,
+			text = "The agent found a review concern.",
+			severity = "high",
+			confidence = 0.94,
+		},
+		{
+			id = "agent-002",
+			path = "README.md",
+			text = "The finding applies to this file.",
+		},
+	},
+}
+local imported = assert(notes.import_findings(agent_payload))
+assert(imported.added == 2 and imported.updated == 0 and #imported.errors == 0)
+local imported_owned = assert(lists.find_owned(require("quickreview.scope").id(notes.scope())))
+local imported_note
+for _, item in ipairs(imported_owned.items) do
+	local note = annotations.get(item)
+	if note and note.id == "agent-001" then
+		imported_note = note
+		assert(note.metadata.source == "test-agent")
+		assert(note.metadata.severity == "high")
+		assert(item.filename == file and item.lnum == 12)
+	end
+end
+assert(imported_note)
+
+local updated = assert(notes.import_findings({
+	version = 1,
+	findings = {
+		{ id = "agent-001", path = "README.md", line = 13, text = "The updated review concern." },
+	},
+}))
+assert(updated.added == 0 and updated.updated == 1 and #updated.errors == 0)
+local updated_owned = assert(lists.find_owned(require("quickreview.scope").id(notes.scope())))
+for _, item in ipairs(updated_owned.items) do
+	local note = annotations.get(item)
+	if note and note.id == "agent-001" then
+		assert(note.text == "The updated review concern.")
+		assert(note.metadata.source == "test-agent")
+		assert(item.lnum == 13)
+	end
+end
+
+local import_path = vim.fn.tempname()
+assert(vim.fn.writefile({ vim.json.encode({
+	version = 1,
+	findings = { { id = "agent-003", path = "README.md", line = 14, text = "Imported through the command." } },
+}) }, import_path) == 0)
+vim.api.nvim_cmd({ cmd = "QuickReviewImport", args = { import_path } }, {})
+vim.fn.delete(import_path)
+local command_import = assert(lists.find_owned(require("quickreview.scope").id(notes.scope())))
+local command_note
+for _, item in ipairs(command_import.items) do
+	local note = annotations.get(item)
+	if note and note.id == "agent-003" then
+		command_note = note
+	end
+end
+assert(command_note)
+
+local partially_imported = assert(notes.import_findings({
+	version = 1,
+	findings = {
+		{ id = "outside", path = "../outside.lua", line = 1, text = "must be rejected" },
+		{ id = "agent-004", path = "SPINOFF.md", line = 1, text = "The valid finding remains importable." },
+	},
+}))
+assert(partially_imported.added == 1 and #partially_imported.errors == 1)
 
 vim.fn.setqflist({}, "r", { title = "files", items = { { filename = file } } })
 local files_list = lists.current()

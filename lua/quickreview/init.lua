@@ -21,6 +21,7 @@ local marks = require("quickreview.marks")
 local picker = require("quickreview.picker")
 local exporter = require("quickreview.export")
 local sender = require("quickreview.sender")
+local importer = require("quickreview.import")
 
 local current_scope
 local review_watch
@@ -81,7 +82,7 @@ local function restore_review()
 	end
 	local snapshot, err = persist.load({ namespace = "quickreview", name = "review", scope = current_scope })
 	if not snapshot then
-		if err then
+		if err and not tostring(err):match("^not%-found:") then
 			notify("could not restore review list: " .. err, vim.log.levels.WARN)
 		end
 		return
@@ -688,6 +689,32 @@ function M.load_list(name, opts)
 	return restored
 end
 
+function M.import_findings(source, opts)
+	refresh_scope()
+	opts = vim.tbl_extend("force", {}, opts or {}, {
+		root = current_scope and current_scope.root,
+		scope_id = scope_id(),
+		title = config.get().quickfix_title,
+	})
+	local result, err = importer.run(source, opts)
+	if not result then
+		notify("import failed: " .. tostring(err), vim.log.levels.ERROR)
+		return nil, err
+	end
+	marks.refresh()
+	persist_review()
+	local imported = result.added + result.updated
+	if #result.errors > 0 then
+		notify(("imported %d findings; skipped %d"):format(imported, #result.errors), vim.log.levels.WARN)
+	else
+		notify(
+			("imported %d findings (%d added, %d updated)"):format(imported, result.added, result.updated),
+			vim.log.levels.INFO
+		)
+	end
+	return result
+end
+
 function M.next()
 	return M.pick({ source = "owned", scope_id = scope_id() })
 end
@@ -736,6 +763,9 @@ local function install_commands()
 	command("QuickReviewLoadList", function(o)
 		M.load_list(o.args)
 	end, { nargs = 1, desc = "Load a named native list" })
+	command("QuickReviewImport", function(o)
+		M.import_findings(o.args)
+	end, { nargs = 1, complete = "file", desc = "Import agent review findings from JSON" })
 	command("QuickReviewHide", marks.hide, { desc = "Hide QuickReview marks" })
 	command("QuickReviewShow", marks.show, { desc = "Show QuickReview marks" })
 	command("QuickReviewHover", function()

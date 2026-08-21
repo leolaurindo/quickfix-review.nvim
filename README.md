@@ -28,6 +28,7 @@ user-facing wrappers, not inter-plugin APIs.
 - `:QuickReviewExport` exports the displayed native list from a qf buffer, otherwise the owned review list.
 - `:QuickReviewExportAndClear` clears only after a successful destination result.
 - `:QuickReviewSaveList <name>` and `:QuickReviewLoadList <name>` persist explicitly selected native lists.
+- `:QuickReviewImport <file>` imports agent-generated review findings from JSON.
 - `:QuickReviewHide` and `:QuickReviewShow` control source inline marks.
 - `:QuickReviewHover` shows the note attached to the current qf row.
 
@@ -76,6 +77,43 @@ item.user_data.quickreview = {
   },
 }
 ```
+
+Agent-generated findings can be imported into the owned review list without an
+interactive note editor:
+
+```lua
+require("quickreview").import_findings("findings.json", { source = "agent" })
+```
+
+The file must contain a versioned payload with a `findings` array. Each finding
+requires `text` and a repository-relative `path`; `line` and `line_end` are
+optional for file-level findings. Stable string `id` values update existing
+findings when the file is imported again. Findings without an `id` are matched
+by location. Optional `severity`, `confidence`, `category`, `evidence`, and
+`suggestion` values are retained in `note.metadata`.
+
+```json
+{
+  "version": 1,
+  "source": "agent",
+  "findings": [
+    {
+      "id": "agent-001",
+      "path": "lua/example.lua",
+      "line": 10,
+      "line_end": 12,
+      "text": "This branch skips cleanup when the operation fails.",
+      "severity": "high",
+      "confidence": 0.94,
+      "evidence": "The error return bypasses the cleanup call.",
+      "suggestion": "Move cleanup into the failure path."
+    }
+  ]
+}
+```
+
+The canonical agent workflow is documented in
+[`skills/quickreview-review/SKILL.md`](skills/quickreview-review/SKILL.md).
 
 ## Export
 
