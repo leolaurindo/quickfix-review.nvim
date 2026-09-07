@@ -11,7 +11,7 @@ source of truth.
 - Required: [quickfix-export.nvim](https://github.com/leolaurindo/quickfix-export.nvim)
 - Optional: [quickfix-persist.nvim](https://github.com/leolaurindo/quickfix-persist.nvim)
 
-Local development uses sibling checkouts under `~/projects`; keep those paths
+Local development uses sibling checkouts under `~/projects/quickplugins`; keep those paths
 and `test/manual_init.lua` working until the plugins are published.
 
 ## Decisions
@@ -26,3 +26,7 @@ and `test/manual_init.lua` working until the plugins are published.
 - Prefer small, direct Lua changes and existing Neovim APIs.
 - Keep generic list/export behavior in the sibling plugins.
 - Add focused headless tests for behavior changes and run `luacheck`.
+
+
+## Behavior
+- You may spin subagents for multiple parallel tasks.

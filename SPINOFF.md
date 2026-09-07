@@ -1,31 +1,32 @@
 # Quickfix Plugin Spinoff
 
-This document records the proposed split between generic native quickfix
-actions, export, persistence, and QuickReview. It is a design boundary and
-migration plan, not a requirement to publish four repositories immediately.
+This document records the split between generic native quickfix actions, export,
+persistence, and QuickReview. It defines the current architecture and API
+boundaries, plus the remaining validation and product work.
 
-## Recommendation
+## Architecture
 
-Use four plugins with one-way dependencies:
+The runtime is split into four plugins with one-way dependencies:
 
 1. `quickfix-actions.nvim`: native quickfix/location-list actions and qf UI lifecycle.
 2. `quickfix-export.nvim`: normalized records, formatters, and destinations.
 3. `quickfix-persist.nvim`: named JSON snapshots and watches.
 4. `quickreview.nvim`: annotations, review policy, source resolvers, and note UI.
 
-`quickfix-export` and `quickfix-persist` use `quickfix-actions` for native list
-access. `quickreview` uses all three, with persistence remaining optional.
-None of the generic plugins require `quickreview`.
+`quickfix-export` uses `quickfix-actions` for native list access.
+`quickfix-persist` accesses native lists directly and remains note-agnostic.
+`quickreview` requires Actions and Export, and optionally uses Persist. None of
+the generic plugins require `quickreview`.
 
-The current repository already has the correct persistence boundary. The
-actions and export layers should be extracted only after their generic APIs are
-tested and named; the extraction should not be another behavior rewrite.
+Actions and Export have already been extracted without retaining duplicate
+QuickReview implementations. The remaining work is compatibility validation and
+the follow-up decisions listed below; it should not be another behavior rewrite.
 
 ## Repository Strategy
 
-Use four independent repositories under `~/projects`: `quickfix-actions.nvim`,
-`quickfix-export.nvim`, `quickfix-persist.nvim`, and `quickreview.nvim`.
-There is no monorepo or aggregate installable plugin.
+Use four independent repositories under `~/projects/quickplugins`:
+`quickfix-actions.nvim`, `quickfix-export.nvim`, `quickfix-persist.nvim`, and
+`quickreview.nvim`. There is no monorepo or aggregate installable plugin.
 
 Standalone tests add the repository under test and its required dependencies
 to `runtimepath`. Cross-plugin tests use the sibling local repository paths,
@@ -62,11 +63,11 @@ notes exist:
 Those are reasonable standalone qf features. Keeping them in QuickReview is
 convenient but couples users who only want qf tooling to annotation policy.
 
-## What Moves To `quickfix-actions`
+## What Is In `quickfix-actions`
 
-Move these mechanisms without changing their behavior:
+These mechanisms have been extracted without changing their intended behavior:
 
-- The generic portions of `lists.lua`: kind detection, target IDs, reads, changedtick checks, item replacement, current-row lookup, clearing, and deletion.
+- The generic portions formerly in QuickReview's `lists.lua`: kind detection, target IDs, reads, changedtick checks, item replacement, current-row lookup, clearing, and deletion.
 - Generic qf/loclist picker entries and native jump behavior.
 - Open, close, and toggle quickfix/location-list windows, including height and focus options.
 - The qf-local `<CR>` and `dd` mappings. `[q`, `]q`, `[l`, and `]l` remain Neovim defaults.
@@ -99,9 +100,9 @@ list. It must not take ownership of `quickfixtextfunc` or make the native list
 buffer editable by default. If these constraints cannot be met reliably, the
 feature should remain absent rather than imitate an editable qf UI poorly.
 
-## What Moves To `quickfix-export`
+## What Is In `quickfix-export`
 
-Keep export useful for every native list:
+Export is already useful for every native list:
 
 - Read a target through `quickfix-actions`.
 - Normalize entries into ordered records.
@@ -113,9 +114,9 @@ Keep export useful for every native list:
 The default text is `item.text`. QuickReview supplies a note-aware selector
 when it wants annotated export behavior.
 
-## What Stays In `quickreview`
+## What Is In `quickreview`
 
-Keep these note-specific policies and behaviors:
+QuickReview contains these note-specific policies and behaviors:
 
 - `annotations.lua` and the `user_data.quickreview` schema.
 - Note IDs, note text, and timestamps.
@@ -127,14 +128,14 @@ Keep these note-specific policies and behaviors:
 - Note-aware export text selection and `ExportAndClear` policy.
 - The plain-text note editor and note commands.
 
-QuickReview should depend on `quickfix-actions` and `quickfix-export`, then
-optionally use `quickfix-persist` for the owned review list. It must report a
-clear error when a required plugin is missing rather than retaining duplicate
-fallback implementations.
+QuickReview depends on `quickfix-actions` and `quickfix-export`, and optionally
+uses `quickfix-persist` for the owned review list. It reports a clear error when
+a required plugin is missing rather than retaining duplicate fallback
+implementations.
 
-## What Stays In `quickfix-persist`
+## What Is In `quickfix-persist`
 
-Keep persistence completely note-agnostic:
+Persistence is completely note-agnostic:
 
 - Capture and restore native qf/location snapshots.
 - Namespaces, snapshot names, scopes, and safe paths.
@@ -148,8 +149,8 @@ producer lists.
 
 ## Integration Contract
 
-QuickReview should receive generic list targets from QuickfixActions and
-normalized records from QuickfixExport, then provide note-aware callbacks:
+QuickReview receives generic list targets from QuickfixActions and normalized
+records from QuickfixExport, then provides note-aware callbacks:
 
 ```lua
 local actions = require("quickfix_actions")
@@ -201,17 +202,33 @@ The native list item remains the source of truth. The actions and export layers
 must not copy or rewrite list entries merely to implement picker or export
 behavior.
 
-## Migration Order
+## Extraction Status And Remaining Work
 
-1. Add characterization tests that freeze current native list, annotation, command, and mapping behavior.
-2. Extract generic list target/read/replace/delete operations into `quickfix-actions` with no behavior change.
-3. Extract normalized export records and formatter/destination APIs into `quickfix-export`.
-4. Add standalone tests for unannotated qf lists, loclists, stale IDs, ordering, deletion, metadata preservation, UI lifecycle, and export edge cases.
-5. Make QuickReview depend on the actions and export APIs.
-6. Keep `quickfix-persist` note-agnostic and use it for the owned review list only when available.
-7. Move generic commands to `QuickfixActions...` and `QuickfixExport...`; keep note commands under `QuickReview...`.
-8. Test Quicker coexistence at a recorded revision, Neovim 0.10 and current stable Neovim, and QuickReview with and without optional Persist.
-9. Remove duplicated internal code only after all standalone and cross-repository suites pass.
+Completed:
+
+1. Characterization and integration tests cover native lists, annotations,
+   commands, mappings, export, import, and optional persistence.
+2. Generic list target/read/replace/delete operations and qf UI lifecycle live in
+   `quickfix-actions`.
+3. Normalized export records, formatters, and destinations live in
+   `quickfix-export`.
+4. QuickReview consumes the Actions and Export Lua APIs directly; Persist remains
+   optional and note-agnostic.
+5. Generic commands use `QuickfixActions...` and `QuickfixExport...`; note
+   commands remain under `QuickReview...`.
+6. Duplicate generic list and export implementations have been removed from
+   QuickReview.
+
+Remaining validation and product work:
+
+1. Test Quicker coexistence at a recorded revision, Neovim 0.10, and current
+   stable Neovim, including metadata preservation and mapping ownership.
+2. Decide whether Export needs the proposed custom formatter callback API.
+3. Decide the explicit QuickReview export shape for annotation metadata.
+4. Decide whether to rename `quickreview.nvim` to clarify its relationship to
+   the generic plugins.
+5. Keep editable qf `:write` support deferred unless a safe opt-in experiment
+   is justified.
 
 ## Non-Goals
 
@@ -226,10 +243,12 @@ behavior.
 
 ## Current Status
 
-The current implementation is still a two-plugin runtime:
+The four-plugin architecture described here is implemented:
 
-- `quickreview.nvim` contains note policy, generic actions, and export conveniences.
-- `quickfix_persist` is already independent.
+- `quickfix-actions.nvim` owns generic native list actions and qf UI lifecycle.
+- `quickfix-export.nvim` owns generic records, formatters, and destinations.
+- `quickfix-persist.nvim` owns note-agnostic snapshots and watches.
+- `quickreview.nvim` owns annotations, review policy, resolvers, marks, and note UI.
 
-The four-plugin extraction described here is the next architectural refactor,
-not a requirement for using the current plugin.
+The remaining work is integration validation and the product decisions listed in
+[PLAN.md](PLAN.md); none is required to use the current plugin.
