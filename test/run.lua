@@ -24,6 +24,8 @@ notes.setup({ persist_review_list = false })
 assert(vim.fn.exists(":QuickfixReviewAdd") == 2)
 assert(vim.fn.exists(":QuickfixReviewImport") == 2)
 assert(vim.fn.exists(":QuickfixReviewExport") == 2)
+assert(vim.fn.exists(":QuickfixReviewExportUser") == 2)
+assert(vim.fn.exists(":QuickfixReviewExportAgent") == 2)
 assert(vim.fn.exists(":QuickfixActionsDelete") == 2)
 assert(vim.fn.exists(":QuickfixExport") == 2)
 
@@ -197,6 +199,7 @@ assert(not resolver.location(invalid_buf))
 local agent_payload = {
 	version = 1,
 	source = "test-agent",
+	origin = "agent",
 	findings = {
 		{
 			id = "agent-001",
@@ -222,6 +225,7 @@ for _, item in ipairs(imported_owned.items) do
 	if note and note.id == "agent-001" then
 		imported_note = note
 		assert(note.metadata.source == "test-agent")
+		assert(note.metadata.origin == "agent")
 		assert(note.metadata.severity == "high")
 		assert(item.filename == file and item.lnum == 12)
 	end
@@ -238,6 +242,19 @@ for _, record in ipairs(imported_records) do
 	end
 end
 assert(vim.deep_equal(exported_metadata, imported_note.metadata))
+local agent_records = assert(require("quickfix_review.export").records({
+	list = { kind = "quickfix", id = imported_owned.id },
+	note_origin = "agent",
+}))
+assert(#agent_records == 2)
+assert(agent_records[1].labels[#agent_records[1].labels] == "source: agent")
+local user_records = assert(require("quickfix_review.export").records({
+	list = { kind = "quickfix", id = imported_owned.id },
+	note_origin = "user",
+}))
+for _, record in ipairs(user_records) do
+	assert(not record.text:find("agent", 1, true))
+end
 
 local updated = assert(notes.import_findings({
 	version = 1,
@@ -272,6 +289,7 @@ for _, item in ipairs(command_import.items) do
 	end
 end
 assert(command_note)
+assert(command_note.metadata.origin == "agent")
 
 local partially_imported = assert(notes.import_findings({
 	version = 1,

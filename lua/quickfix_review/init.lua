@@ -684,6 +684,16 @@ function M.export(opts)
 	return true, result, details
 end
 
+function M.export_user(opts)
+	opts = vim.tbl_extend("force", {}, opts or {}, { note_origin = "user" })
+	return M.export(opts)
+end
+
+function M.export_agent(opts)
+	opts = vim.tbl_extend("force", {}, opts or {}, { note_origin = "agent" })
+	return M.export(opts)
+end
+
 function M.clear_annotations(opts)
 	local target = selected_target(opts)
 	if not target then
@@ -858,6 +868,8 @@ local function install_commands()
 		M.search()
 	end, { desc = "Search the current list and review notes" })
 	command("QuickfixReviewExport", M.export, { desc = "Export the selected list" })
+	command("QuickfixReviewExportUser", M.export_user, { desc = "Export user-authored notes" })
+	command("QuickfixReviewExportAgent", M.export_agent, { desc = "Export agent-authored notes" })
 	command("QuickfixReviewExportList", M.export_qf, { desc = "Export the current native list" })
 	command("QuickfixReviewExportAndClear", M.export_and_clear, { desc = "Export then clear safely" })
 	command("QuickfixReviewClear", M.clear_annotations, { desc = "Clear annotations or owned entries" })
@@ -868,7 +880,7 @@ local function install_commands()
 		M.load_list(o.args)
 	end, { nargs = 1, desc = "Load a named native list" })
 	command("QuickfixReviewImport", function(o)
-		M.import_findings(o.args)
+		M.import_findings(o.args, { origin = "agent" })
 	end, { nargs = 1, complete = "file", desc = "Import agent review findings from JSON" })
 	command("QuickfixReviewHide", marks.hide, { desc = "Hide Quickfix Review marks" })
 	command("QuickfixReviewShow", marks.show, { desc = "Show Quickfix Review marks" })

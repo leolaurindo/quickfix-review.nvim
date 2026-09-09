@@ -70,7 +70,8 @@ Quickfix Review can receive findings from coding agents through the repository's
 2. Import the findings with `:QuickfixReviewImport findings.json`.
 3. Review and edit the imported notes in the owned Quickfix Review list.
 4. Export the selected notes to the clipboard or a file, or send them to
-   Sidekick when `sidekick.nvim` is installed.
+   Sidekick when `sidekick.nvim` is installed. Use
+   `:QuickfixReviewExportAgent` to send only agent-authored notes.
 
 The skill is also usable without live integration: the agent writes the file and
 asks you to run the import command. See [Import](#import) for the JSON format.
@@ -111,6 +112,8 @@ See [Export](#export) for custom formats and destinations.
 | `:QuickfixReviewPickCurrent` | Pick a note in the current list |
 | `:QuickfixReviewSearch` | Search the current list by path, entry text, or note text |
 | `:QuickfixReviewExport` | Export the selected list |
+| `:QuickfixReviewExportUser` | Export user-authored notes only |
+| `:QuickfixReviewExportAgent` | Export agent-authored notes only |
 | `:QuickfixReviewExportList` | Export the current native list |
 | `:QuickfixReviewExportAndClear` | Export, then clear on success |
 | `:QuickfixReviewClear` | Clear annotations or owned entries |
@@ -245,12 +248,15 @@ require("quickfix_review").import_findings("findings.json", { source = "agent" }
 Each finding requires `text` and a repository-relative `path`; `line` and
 `line_end` are optional. Stable string IDs update existing findings; findings
 without IDs match by location. `severity`, `confidence`, `category`, `evidence`,
-and `suggestion` are retained in `note.metadata`.
+and `suggestion` are retained in `note.metadata`. Imported agent findings use
+`metadata.origin = "agent"`; existing notes without an origin are treated as
+user-authored.
 
 ```json
 {
   "version": 1,
   "source": "agent",
+  "origin": "agent",
   "findings": [
     {
       "id": "agent-001",
@@ -295,7 +301,9 @@ require("quickfix_review").export({
 
 Structured records include annotation `metadata`; IDs and timestamps are not
 exported. Markdown stays concise and JSON/custom formatters receive metadata.
-Built-in destinations are `clipboard`, `file`, and optional `sidekick`.
+Agent-authored Markdown records include a `[source: agent]` label. Use
+`:QuickfixReviewExportUser` or `:QuickfixReviewExportAgent` to filter by note
+origin. Built-in destinations are `clipboard`, `file`, and optional `sidekick`.
 See [`docs/integrations.md`](docs/integrations.md) for extension contracts.
 
 ## Integrations

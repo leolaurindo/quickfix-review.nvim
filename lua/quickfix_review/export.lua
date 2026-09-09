@@ -33,7 +33,14 @@ function M.records(opts)
 	if not target then
 		return nil, "no Quickfix Review list"
 	end
+	local note_origin = opts.note_origin
+	if note_origin ~= nil and note_origin ~= "user" and note_origin ~= "agent" then
+		return nil, "note_origin must be user or agent"
+	end
 	local generic_opts = vim.tbl_extend("force", opts, { list = target })
+	if note_origin ~= nil then
+		generic_opts.strict = false
+	end
 	local selector = opts.text
 	generic_opts.text = function(item, default_text)
 		local annotation = annotations.get(item)
@@ -47,6 +54,17 @@ function M.records(opts)
 	local records, err, details = generic.records(generic_opts)
 	if not records then
 		return nil, err, details
+	end
+	if note_origin ~= nil then
+		local filtered = {}
+		for _, record in ipairs(records) do
+			local item = details.snapshot.items[record.index]
+			local annotation = item and annotations.get(item)
+			if annotation and annotations.origin(annotation) == note_origin then
+				filtered[#filtered + 1] = record
+			end
+		end
+		records = filtered
 	end
 	local fingerprints = {}
 	for _, record in ipairs(records) do
@@ -71,6 +89,9 @@ function M.records(opts)
 			record.stale = stale or nil
 			if stale and warn_stale then
 				labels[#labels + 1] = "location may be stale"
+			end
+			if annotations.origin(annotation) == "agent" then
+				labels[#labels + 1] = "source: agent"
 			end
 			record.labels = #labels > 0 and labels or nil
 			details.stale = (details.stale or 0) + (stale and 1 or 0)

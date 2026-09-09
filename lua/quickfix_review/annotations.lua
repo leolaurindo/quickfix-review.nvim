@@ -87,6 +87,20 @@ function M.clone(item)
 	return copy, M.get(copy)
 end
 
+function M.origin(note)
+	local metadata = type(note) == "table" and note.metadata
+	if type(metadata) ~= "table" then
+		return "user"
+	end
+	if metadata.origin == "agent" then
+		return "agent"
+	end
+	if metadata.origin == "user" or metadata.source == nil or metadata.source == "user" then
+		return "user"
+	end
+	return "agent"
+end
+
 function M.valid(note)
 	return type(note) == "table" and type(note.id) == "string" and type(note.location) == "table"
 end

@@ -100,6 +100,7 @@ local function metadata(finding, opts, payload)
 		end
 	end
 	value.source = value.source or finding.source or opts.source or payload.source
+	value.origin = value.origin or finding.origin or opts.origin or payload.origin
 	return next(value) and value or nil
 end
 

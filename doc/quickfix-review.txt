@@ -93,6 +93,10 @@ COMMANDS                                                       *quickfix-review-
 :QuickfixReviewSearch  Search the current list by path, entry text, or note text.
                                                         *QuickfixReviewExport*
 :QuickfixReviewExport  Export the selected list.
+                                                   *QuickfixReviewExportUser*
+:QuickfixReviewExportUser  Export user-authored notes only.
+                                                  *QuickfixReviewExportAgent*
+:QuickfixReviewExportAgent  Export agent-authored notes only.
                                                     *QuickfixReviewExportList*
 :QuickfixReviewExportList  Export the current native list.
                                                *QuickfixReviewExportAndClear*
@@ -123,8 +127,10 @@ COMMANDS                                                       *quickfix-review-
 EXPORT                                                         *quickfix-review-export*
 
 Built-in formats are markdown and json. Destinations are clipboard, file, and
-optional sidekick. Use text(item, note, default_text) to choose note or
-producer text. See |quickfix-export.nvim| for generic export contracts.
+optional sidekick. Agent-authored Markdown records include a [source: agent]
+label; JSON and custom formats receive annotation metadata. Use
+text(item, note, default_text) to choose note or producer text. See
+|quickfix-export.nvim| for generic export contracts.
 
 ==============================================================================
  vim:tw=78:ts=8:ft=help:norl:

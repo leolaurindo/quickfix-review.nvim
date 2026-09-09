@@ -29,6 +29,7 @@ between 0 and 1 and order findings by severity, then location.
 {
   "version": 1,
   "source": "codex",
+  "origin": "agent",
   "findings": [
     {
       "id": "stable-finding-id",
@@ -46,8 +47,9 @@ between 0 and 1 and order findings by severity, then location.
 }
 ```
 
-Required fields are `version`, `findings`, `path`, and `text`. `line` and
-`line_end` are optional for file findings. Use repository-relative paths,
-positive 1-based lines, and stable IDs. An empty findings array is valid.
+Required fields are top-level `version`, `origin`, and `findings`, plus
+`path` and `text` for each finding. `line` and `line_end` are optional for file
+findings. Set `origin` to `agent`, use repository-relative paths, positive
+1-based lines, and stable IDs. An empty findings array is valid.
 Do not include absolute paths outside the repository, prose outside the JSON, or
 executable content.
