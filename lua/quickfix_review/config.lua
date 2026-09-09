@@ -17,16 +17,7 @@ M.defaults = {
 		inline = true,
 		float = { enabled = true, delay = 500, permanent = false, command = true },
 	},
-	keys = {
-		note = "<leader>rn",
-		send = "<leader>rs",
-		export = "<leader>re",
-		export_and_clear = "<leader>rx",
-		clear = "<leader>rc",
-		list = "<leader>rl",
-		next = "]r",
-		prev = "[r",
-	},
+	keys = {},
 }
 
 local options = vim.deepcopy(M.defaults)

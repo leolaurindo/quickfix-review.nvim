@@ -1,26 +1,23 @@
 # quickfix-review.nvim
 
-Add review notes to source locations, quickfix/location-list entries, and Git
-diff rows. Notes remain attached to their original producer items, while a
+Add review notes to almost any location, such as source code,
+quickfix/location-list entries, Git diff rows and more. Notes remain attached to
+their original producer items, while a
 dedicated `Quickfix Review` quickfix list provides a central view for reviewing,
 persisting, and exporting them.
 
-Requires Neovim 0.10+, [quickfix-actions.nvim](https://github.com/leolaurindo/quickfix-actions.nvim),
-and [quickfix-export.nvim](https://github.com/leolaurindo/quickfix-export.nvim).
-Persistence and Git diff metadata are available through the optional
-[quickfix-persist.nvim](https://github.com/leolaurindo/quickfix-persist.nvim) and
-[quickfix-diffs.nvim](https://github.com/leolaurindo/quickfix-diffs.nvim)
-integrations. Quickfix Review works standalone or as part of the
-[quickfix-kit.nvim](https://github.com/leolaurindo/quickfix-kit.nvim) package.
+Quickfix Review works standalone or as part of the [quickfix-kit.nvim](https://github.com/leolaurindo/quickfix-kit.nvim) package.
+
+Requires Neovim 0.10+.
 
 Dependencies:
 
-- Required: [quickfix-actions.nvim](https://github.com/leolaurindo/quickfix-actions.nvim), [quickfix-export.nvim](https://github.com/leolaurindo/quickfix-export.nvim)
-- Optional dependency: [quickfix-persist.nvim](https://github.com/leolaurindo/quickfix-persist.nvim)
-
-Optional integration:
-
-- [quickfix-diffs.nvim](https://github.com/leolaurindo/quickfix-diffs.nvim) supplies diff metadata for note locations.
+- Required:
+    - [quickfix-actions.nvim](https://github.com/leolaurindo/quickfix-actions.nvim),
+    - [quickfix-export.nvim](https://github.com/leolaurindo/quickfix-export.nvim)
+- Optional:
+    - [quickfix-persist.nvim](https://github.com/leolaurindo/quickfix-persist.nvim)
+    - [quickfix-diffs.nvim](https://github.com/leolaurindo/quickfix-diffs.nvim) supplies diff metadata for note locations.
 
 ## Installation
 
@@ -64,6 +61,42 @@ wrappers. A note is stored on its native producer item in
 `item.user_data.quickfix_review` and mirrored into the branch-scoped
 `Quickfix Review` quickfix list. Producer text and metadata stay unchanged.
 
+## Agent workflow
+
+Quickfix Review can receive findings from coding agents through the repository's
+[`skills/quickfix-review/SKILL.md`](skills/quickfix-review/SKILL.md) workflow:
+
+1. The agent reviews the changeset and writes versioned `findings.json`.
+2. Import the findings with `:QuickfixReviewImport findings.json`.
+3. Review and edit the imported notes in the owned Quickfix Review list.
+4. Export the selected notes to the clipboard or a file, or send them to
+   Sidekick when `sidekick.nvim` is installed.
+
+The skill is also usable without live integration: the agent writes the file and
+asks you to run the import command. See [Import](#import) for the JSON format.
+
+Sidekick is an optional destination supplied by `quickfix-export.nvim`:
+
+```lua
+require("quickfix_review").setup({
+  send = "sidekick",
+})
+```
+
+Without this configuration, exports use the default clipboard destination.
+See [Export](#export) for custom formats and destinations.
+
+## Quick start
+
+1. Open a native quickfix or location list with `:copen` or `:lopen`.
+2. In a source buffer, run `:QuickfixReviewAdd` at the cursor, or select a range
+   first to annotate that range.
+3. Alternatively, if a quickfix or location-list entry already exists, place
+   the cursor on a row and press `a` or `i` to add or edit its note.
+4. Save the note with `<C-s>` or `q`.
+5. Open all notes with `:QuickfixReviewList`, then export with
+   `:QuickfixReviewExport`.
+
 ## Commands
 
 | Command | Action |
@@ -92,10 +125,28 @@ wrappers. A note is stored on its native producer item in
 
 `QuickfixReviewAdd` accepts a range. `QuickfixReviewReanchor` accepts a range
 and `!` for file scope. Notes can be added from a source buffer, a quickfix row,
-a location-list row, or a diff row. The qf buffer remains native and
-unmodifiable: use the note mapping (default `<leader>rn`), `a`, or the commands
-instead of editing rendered text. `<CR>` jumps and `dd` deletes the native entry;
-`e` edits its note.
+a location-list row, or a diff row.
+
+### Quickfix mappings
+
+Quickfix and location-list buffers remain native and unmodifiable:
+
+- `<CR>` jumps to the native entry.
+- `dd` deletes the native entry.
+- `a` and `i` add or edit its note.
+
+Global mappings are disabled by default to avoid collisions. Add only the ones
+you want under `keys`, for example:
+
+```lua
+require("quickfix_review").setup({
+  keys = {
+    note = "<leader>rn",
+    next = "]r",
+    prev = "[r",
+  },
+})
+```
 
 `QuickfixReviewSearch` searches every entry in the current native quickfix or
 location list by file path, producer text, and attached note text. With Snacks it
@@ -124,22 +175,10 @@ Defaults:
 | `quickfix.prefill` | `true` | Start new qf notes with producer text |
 | `quickfix.inline` | `true` | Show marks in qf buffers |
 | `quickfix.float` | `{ enabled = true, delay = 500, permanent = false, command = true }` | qf note hover |
-| `keys` | See below | Global note, export, list, and navigation mappings |
+| `keys` | `{}` | Optional global note, export, list, and navigation mappings |
 
-The default mappings are:
-
-```lua
-{
-  note = "<leader>rn",
-  send = "<leader>rs",
-  export = "<leader>re",
-  export_and_clear = "<leader>rx",
-  clear = "<leader>rc",
-  list = "<leader>rl",
-  next = "]r",
-  prev = "[r",
-}
-```
+Global mappings are disabled by default. Configure only the mappings you want;
+see the Quickfix mappings section above.
 
 Example:
 

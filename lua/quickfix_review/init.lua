@@ -962,16 +962,15 @@ function M.setup(opts)
 		if not actions_qf_mapping("dd") then
 			vim.keymap.set("n", "dd", delete_qf_entry, { buffer = buf, nowait = true, desc = "Delete quickfix entry" })
 		end
-		vim.keymap.set(
-			"n",
-			config.get().keys.note,
-			annotate_list_entry,
-			{ buffer = buf, desc = "Add or edit Quickfix Review annotation" }
-		)
-		vim.keymap.set("n", "a", annotate_list_entry, { buffer = buf, desc = "Add QuickfixReview annotation" })
-		vim.keymap.set("n", "e", function()
-			annotate_list_entry(true)
-		end, { buffer = buf, desc = "Edit QuickfixReview annotation" })
+		local note_key = config.get().keys.note
+		if note_key then
+			vim.keymap.set("n", note_key, annotate_list_entry, {
+				buffer = buf,
+				desc = "Add or edit Quickfix Review annotation",
+			})
+		end
+		vim.keymap.set("n", "a", annotate_list_entry, { buffer = buf, desc = "Add or edit QuickfixReview annotation" })
+		vim.keymap.set("n", "i", annotate_list_entry, { buffer = buf, desc = "Add or edit QuickfixReview annotation" })
 	end
 	vim.api.nvim_create_autocmd("FileType", {
 		group = group,
@@ -991,12 +990,28 @@ function M.setup(opts)
 	install_commands()
 	local keys = config.get().keys
 	for _, mode in ipairs({ "n", "v" }) do
-		vim.keymap.set(mode, keys.note, M.add, { desc = "QuickfixReviewAdd" })
-		vim.keymap.set(mode, keys.export, M.export, { desc = "QuickfixReviewExport" })
-		vim.keymap.set(mode, keys.export_and_clear, M.export_and_clear, { desc = "QuickfixReviewExportAndClear" })
+		if keys.note then
+			vim.keymap.set(mode, keys.note, M.add, { desc = "QuickfixReviewAdd" })
+		end
+		if keys.export then
+			vim.keymap.set(mode, keys.export, M.export, { desc = "QuickfixReviewExport" })
+		end
+		if keys.export_and_clear then
+			vim.keymap.set(mode, keys.export_and_clear, M.export_and_clear, { desc = "QuickfixReviewExportAndClear" })
+		end
 	end
-	vim.keymap.set("n", keys.clear, M.clear_annotations, { desc = "QuickfixReviewClear" })
-	vim.keymap.set("n", keys.list, M.open_list, { desc = "QuickfixReviewList" })
+	if keys.clear then
+		vim.keymap.set("n", keys.clear, M.clear_annotations, { desc = "QuickfixReviewClear" })
+	end
+	if keys.list then
+		vim.keymap.set("n", keys.list, M.open_list, { desc = "QuickfixReviewList" })
+	end
+	if keys.next then
+		vim.keymap.set("n", keys.next, M.next, { desc = "QuickfixReviewNext" })
+	end
+	if keys.prev then
+		vim.keymap.set("n", keys.prev, M.prev, { desc = "QuickfixReviewPrev" })
+	end
 	return M
 end
 
