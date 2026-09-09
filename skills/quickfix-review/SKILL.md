@@ -1,6 +1,6 @@
 ---
 name: quickfix-review
-description: Review a changeset and seed Quickfix Review with concise, evidence-based findings in versioned JSON.
+description: Use when the user asks for a code review and actionable findings should be reported through Quickfix Review; produce importable, versioned JSON.
 ---
 
 # Quickfix Review
