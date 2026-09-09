@@ -1,9 +1,9 @@
 local M = {}
-local annotations = require("quickreview.annotations")
-local lists = require("quickreview.lists")
-local location = require("quickreview.location")
-local resolver = require("quickreview.resolver")
-local namespace = vim.api.nvim_create_namespace("quickreview")
+local annotations = require("quickfix_review.annotations")
+local lists = require("quickfix_review.lists")
+local location = require("quickfix_review.location")
+local resolver = require("quickfix_review.resolver")
+local namespace = vim.api.nvim_create_namespace("quickfix_review")
 local visible, configured, enabled = true, true, true
 local hover_win
 local glyph, float_enabled, float_delay, float_permanent = "▲", true, 500, false
@@ -72,11 +72,11 @@ function M.setup(opts)
 	quickfix_float_delay = quickfix_float.delay or 500
 	quickfix_float_permanent = quickfix_float.permanent == true
 	quickfix_command = quickfix_float.command ~= false
-	vim.api.nvim_set_hl(0, "QuickReviewMark", { link = "DiagnosticInfo" })
+	vim.api.nvim_set_hl(0, "QuickfixReviewMark", { link = "DiagnosticInfo" })
 	vim.api.nvim_create_autocmd("ColorScheme", {
-		group = vim.api.nvim_create_augroup("QuickReviewHighlights", { clear = true }),
+		group = vim.api.nvim_create_augroup("QuickfixReviewHighlights", { clear = true }),
 		callback = function()
-			vim.api.nvim_set_hl(0, "QuickReviewMark", { link = "DiagnosticInfo" })
+			vim.api.nvim_set_hl(0, "QuickfixReviewMark", { link = "DiagnosticInfo" })
 		end,
 	})
 	visible = configured and enabled
@@ -95,16 +95,17 @@ function M.render(bufnr)
 		local current = lists.current()
 		local owned = current
 			and type(current.list.context) == "table"
-			and type(current.list.context.quickreview) == "table"
-			and current.list.context.quickreview.role == "notes"
+			and type(current.list.context.quickfix_review) == "table"
+			and current.list.context.quickfix_review.role == "notes"
 		if current and not owned then
 			local line_count = vim.api.nvim_buf_line_count(bufnr)
 			for index, item in ipairs(current.items) do
 				local note = annotations.get(item)
 				if note and index <= line_count and glyph and glyph ~= "" then
 					pcall(vim.api.nvim_buf_set_extmark, bufnr, namespace, index - 1, 0, {
-						virt_text = { { "  " .. glyph, "QuickReviewMark" } },
+						virt_text = { { "  " .. glyph, "QuickfixReviewMark" } },
 						virt_text_pos = "eol",
+						hl_mode = "combine",
 					})
 				end
 			end
@@ -122,7 +123,7 @@ function M.render(bufnr)
 			local line = anchor(r, note)
 			if line and line >= 1 and line <= count and glyph and glyph ~= "" then
 				pcall(vim.api.nvim_buf_set_extmark, bufnr, namespace, line - 1, 0, {
-					virt_text = { { "  " .. glyph, "QuickReviewMark" } },
+					virt_text = { { "  " .. glyph, "QuickfixReviewMark" } },
 					virt_text_pos = "eol",
 					priority = 200,
 				})

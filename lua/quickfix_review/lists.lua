@@ -34,6 +34,10 @@ function M.location(entry, root)
 	if not item then
 		return nil
 	end
+	local diff = type(item.user_data) == "table" and item.user_data.quickfix_diffs or nil
+	if diff ~= nil then
+		return require("quickfix_review.integrations.diffs").location(diff)
+	end
 	local path = item.filename
 	if item.bufnr and item.bufnr > 0 and vim.api.nvim_buf_is_valid(item.bufnr) then
 		path = vim.api.nvim_buf_get_name(item.bufnr)
@@ -41,7 +45,7 @@ function M.location(entry, root)
 	if not path or path == "" then
 		return nil
 	end
-	return require("quickreview.location").canonical({
+	return require("quickfix_review.location").canonical({
 		root = root or vim.fn.getcwd(),
 		file = path,
 		line = item.lnum,
@@ -62,7 +66,7 @@ function M.update_item(target, index, fn, expected_id)
 	if not item then
 		return nil, "list entry is empty"
 	end
-	local annotations = require("quickreview.annotations")
+	local annotations = require("quickfix_review.annotations")
 	if expected_id and (annotations.get(item) or {}).id ~= expected_id then
 		return nil, "list entry changed while it was being edited"
 	end
@@ -84,7 +88,7 @@ function M.delete(target, index, expected_tick)
 end
 
 local function owns(value, scope_id)
-	local marker = type(value.context) == "table" and value.context.quickreview
+	local marker = type(value.context) == "table" and value.context.quickfix_review
 	return type(marker) == "table" and marker.role == "notes" and (not scope_id or marker.scope_id == scope_id)
 end
 
@@ -113,7 +117,7 @@ function M.ensure_owned(opts, scope_id)
 	end
 	local active = vim.fn.getqflist({ id = 0, nr = 0 })
 	local context = {
-		quickreview = { version = 1, role = "notes", scope_id = scope_id },
+		quickfix_review = { version = 1, role = "notes", scope_id = scope_id },
 	}
 	vim.fn.setqflist({}, " ", { nr = "$", title = opts.title, context = context, items = {} })
 	local created = vim.fn.getqflist({ id = 0, all = 1 })
@@ -135,7 +139,7 @@ end
 function M.open_owned(scope_id)
 	local value, target = M.find_owned(scope_id)
 	if not value then
-		return nil, "no QuickReview list"
+		return nil, "no Quickfix Review list"
 	end
 	return actions.open(target)
 end
@@ -149,7 +153,7 @@ function M.for_each_annotation(target, callback)
 	if not value then
 		return nil, err
 	end
-	local annotations = require("quickreview.annotations")
+	local annotations = require("quickfix_review.annotations")
 	for index, item in ipairs(value.items or {}) do
 		local note = annotations.get(item)
 		if note then

@@ -1,0 +1,130 @@
+*quickfix-review.nvim*  Notes across native quickfix lists
+
+=============================================================================
+CONTENTS                                                       *quickfix-review-contents*
+
+                 |quickfix-review-installation|
+                 |quickfix-review-setup|
+                 |quickfix-review-notes|
+                 |quickfix-review-commands|
+                 |quickfix-review-export|
+
+Review makes notes available from source buffers, quickfix/location-list rows,
+and Git diff rows. Notes are stored on native items and mirrored into the
+owned notes quickfix list.
+
+Part of quickfix-kit.nvim:
+https://github.com/leolaurindo/quickfix-kit.nvim
+
+Dependencies:
+- Required: quickfix-actions.nvim and quickfix-export.nvim
+  https://github.com/leolaurindo/quickfix-actions.nvim
+  https://github.com/leolaurindo/quickfix-export.nvim
+- Optional dependency: quickfix-persist.nvim
+  https://github.com/leolaurindo/quickfix-persist.nvim
+- Optional integration: quickfix-diffs.nvim
+  https://github.com/leolaurindo/quickfix-diffs.nvim
+
+INSTALLATION                                                   *quickfix-review-installation*
+
+lazy.nvim: >
+  {
+    "leolaurindo/quickfix-review.nvim",
+    dependencies = {
+      "leolaurindo/quickfix-actions.nvim",
+      "leolaurindo/quickfix-export.nvim",
+    },
+    opts = {},
+  }
+<
+
+vim.pack (Neovim 0.12+): >
+  vim.pack.add({
+    "https://github.com/leolaurindo/quickfix-actions.nvim",
+    "https://github.com/leolaurindo/quickfix-export.nvim",
+    "https://github.com/leolaurindo/quickfix-review.nvim",
+  }, { load = true })
+  require("quickfix_review").setup()
+<
+
+Add Persist for automatic note-list persistence and Diffs for diff metadata.
+
+SETUP                                                          *quickfix-review-setup*
+
+  require("quickfix_review").setup({ send = "clipboard" })
+
+Notes are stored in item.user_data.quickfix_review. Producer fields and text
+remain unchanged. The owned Quickfix Review list contains note text and
+locations.
+
+|QuickfixReviewSearch| searches every entry in the current native quickfix or
+location list by file path, producer text, and attached note text. With Snacks it
+uses a compact live-search select picker. Confirming a result returns focus to
+the list and places the cursor on that row without opening its source buffer.
+|QuickfixReviewPick| and |QuickfixReviewPickCurrent| remain note-oriented source
+navigation pickers.
+
+NOTES                                                         *quickfix-review-notes*
+
+Notes can be line-specific or file-level. Re-anchoring preserves the note ID,
+text, creation time, metadata, and producer origin. Worktree notes use
+whole-file fingerprints; Diffs notes use Git fingerprints. Changed sources
+produce advisory stale warnings.
+
+COMMANDS                                                       *quickfix-review-commands*
+
+                                                           *QuickfixReviewAdd*
+:QuickfixReviewAdd  Add a note at the cursor, range, or qf row.
+                                                        *QuickfixReviewAddFile*
+:QuickfixReviewAddFile  Add a file-level note.
+                                                       *QuickfixReviewReanchor*
+:[range]QuickfixReviewReanchor[!]  Move a note; ! makes it file-level.
+                                                          *QuickfixReviewEdit*
+:QuickfixReviewEdit  Edit a note.
+                                                        *QuickfixReviewDelete*
+:QuickfixReviewDelete  Delete a note.
+                                                          *QuickfixReviewList*
+:QuickfixReviewList  Open the owned notes list.
+                                                          *QuickfixReviewPick*
+:QuickfixReviewPick  Pick an owned note.
+                                                   *QuickfixReviewPickCurrent*
+:QuickfixReviewPickCurrent  Pick a note in the current list.
+                                                        *QuickfixReviewSearch*
+:QuickfixReviewSearch  Search the current list by path, entry text, or note text.
+                                                        *QuickfixReviewExport*
+:QuickfixReviewExport  Export the selected list.
+                                                    *QuickfixReviewExportList*
+:QuickfixReviewExportList  Export the current native list.
+                                               *QuickfixReviewExportAndClear*
+:QuickfixReviewExportAndClear  Export, then clear on success.
+                                                         *QuickfixReviewClear*
+:QuickfixReviewClear  Clear annotations or owned entries.
+                                                     *QuickfixReviewSaveList*
+:QuickfixReviewSaveList {name}  Save the selected native list.
+                                                     *QuickfixReviewLoadList*
+:QuickfixReviewLoadList {name}  Load a named native list.
+                                                        *QuickfixReviewImport*
+:QuickfixReviewImport {file}  Import findings from JSON.
+                                                          *QuickfixReviewQuit*
+:QuickfixReviewQuit  Save and close the note editor (buffer-local).
+                                                          *QuickfixReviewHide*
+:QuickfixReviewHide  Hide source marks.
+                                                          *QuickfixReviewShow*
+:QuickfixReviewShow  Show source marks.
+                                                         *QuickfixReviewHover*
+:QuickfixReviewHover  Show the qf row's note.
+                                                          *QuickfixReviewNext*
+:QuickfixReviewNext  Pick the next note.
+                                                          *QuickfixReviewPrev*
+:QuickfixReviewPrev  Pick the previous note.
+                                                          *QuickfixReviewSend*
+:QuickfixReviewSend  Export through the configured destination.
+
+EXPORT                                                         *quickfix-review-export*
+
+Built-in formats are markdown and json. Destinations are clipboard, file, and
+optional sidekick. Use text(item, note, default_text) to choose note or
+producer text. See |quickfix-export.nvim| for generic export contracts.
+
+==============================================================================
+ vim:tw=78:ts=8:ft=help:norl:

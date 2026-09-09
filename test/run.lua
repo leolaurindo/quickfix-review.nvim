@@ -1,5 +1,5 @@
-vim.env.XDG_DATA_HOME = "/tmp/quickreview-test-data"
-vim.env.XDG_STATE_HOME = "/tmp/quickreview-test-state"
+vim.env.XDG_DATA_HOME = "/tmp/quickfix_review-test-data"
+vim.env.XDG_STATE_HOME = "/tmp/quickfix_review-test-state"
 local root = vim.fn.getcwd()
 
 local function add_dependency(env, sibling)
@@ -14,16 +14,16 @@ add_dependency("QUICKFIX_ACTIONS_PATH", "quickfix-actions.nvim")
 add_dependency("QUICKFIX_EXPORT_PATH", "quickfix-export.nvim")
 vim.opt.rtp:prepend(root)
 
-local notes = require("quickreview")
-local lists = require("quickreview.lists")
-local annotations = require("quickreview.annotations")
-local sender = require("quickreview.sender")
-local resolver = require("quickreview.resolver")
+local notes = require("quickfix_review")
+local lists = require("quickfix_review.lists")
+local annotations = require("quickfix_review.annotations")
+local sender = require("quickfix_review.sender")
+local resolver = require("quickfix_review.resolver")
 
 notes.setup({ persist_review_list = false })
-assert(vim.fn.exists(":QuickReviewAdd") == 2)
-assert(vim.fn.exists(":QuickReviewImport") == 2)
-assert(vim.fn.exists(":QuickReviewExport") == 2)
+assert(vim.fn.exists(":QuickfixReviewAdd") == 2)
+assert(vim.fn.exists(":QuickfixReviewImport") == 2)
+assert(vim.fn.exists(":QuickfixReviewExport") == 2)
 assert(vim.fn.exists(":QuickfixActionsDelete") == 2)
 assert(vim.fn.exists(":QuickfixExport") == 2)
 
@@ -62,7 +62,7 @@ assert(sent == "- `README.md:3-4` - line one line two\n")
 
 local active_id = vim.fn.getqflist({ id = 0 }).id
 local owned, owned_target =
-	lists.ensure_owned({ title = "QuickReview" }, require("quickreview.scope").id(notes.scope()))
+	lists.ensure_owned({ title = "QuickfixReview" }, require("quickfix_review.scope").id(notes.scope()))
 assert(vim.fn.getqflist({ id = 0 }).id == active_id)
 local owned_item = { filename = file, lnum = 10, valid = 1, text = "owned", user_data = {} }
 local owned_location = { root = vim.fn.getcwd(), path = "README.md", line = 10, resolver = "normal" }
@@ -104,14 +104,14 @@ assert(sent:find("local note", 1, true))
 
 vim.fn.setqflist({}, "r", { title = "producer", items = { { filename = file, lnum = 9, text = "diagnostic" } } })
 vim.cmd("copen")
-	local qf_ui = require("quickreview.ui")
+	local qf_ui = require("quickfix_review.ui")
 local qf_input = qf_ui.note_input
 qf_ui.note_input = function(_, callback)
 	callback({ text = "producer note" })
 end
 notes.add()
 qf_ui.note_input = qf_input
-	local qf_ns = vim.api.nvim_get_namespaces().quickreview
+	local qf_ns = vim.api.nvim_get_namespaces().quickfix_review
 local qf_marks = vim.api.nvim_buf_get_extmarks(0, qf_ns, 0, -1, { details = true })
 assert(#qf_marks == 1 and qf_marks[1][4].virt_text[1][1] == "  ▲")
 local qf_target = { kind = "quickfix", id = vim.fn.getqflist({ id = 0 }).id }
@@ -134,7 +134,7 @@ qf_ui.note_input = function(_, callback)
 end
 notes.add()
 qf_ui.note_input = qf_input
-	local mirrored = assert(lists.find_owned(require("quickreview.scope").id(notes.scope())))
+	local mirrored = assert(lists.find_owned(require("quickfix_review.scope").id(notes.scope())))
 local mirrored_note
 for _, item in ipairs(mirrored.items) do
 	local note = annotations.get(item)
@@ -145,7 +145,7 @@ for _, item in ipairs(mirrored.items) do
 end
 assert(mirrored_note)
 
-	local editor = require("quickreview.ui")
+	local editor = require("quickfix_review.ui")
 local original_input = editor.note_input
 editor.note_input = function(_, callback)
 	callback({ text = "source note\nwith detail" })
@@ -154,7 +154,7 @@ vim.cmd.edit(vim.fn.fnameescape(file))
 vim.api.nvim_win_set_cursor(0, { 2, 0 })
 notes.add()
 editor.note_input = original_input
-	local restored_owned = assert(lists.find_owned(require("quickreview.scope").id(notes.scope())))
+	local restored_owned = assert(lists.find_owned(require("quickfix_review.scope").id(notes.scope())))
 local found_source
 for _, item in ipairs(restored_owned.items) do
 	local note = annotations.get(item)
@@ -179,7 +179,7 @@ editor.note_input = function(_, callback)
 end
 notes.add()
 editor.note_input = uri_input
-	local uri_owned = assert(lists.find_owned(require("quickreview.scope").id(notes.scope())))
+	local uri_owned = assert(lists.find_owned(require("quickfix_review.scope").id(notes.scope())))
 local uri_note
 for _, item in ipairs(uri_owned.items) do
 	local note = annotations.get(item)
@@ -215,7 +215,7 @@ local agent_payload = {
 }
 local imported = assert(notes.import_findings(agent_payload))
 assert(imported.added == 2 and imported.updated == 0 and #imported.errors == 0)
-local imported_owned = assert(lists.find_owned(require("quickreview.scope").id(notes.scope())))
+local imported_owned = assert(lists.find_owned(require("quickfix_review.scope").id(notes.scope())))
 local imported_note
 for _, item in ipairs(imported_owned.items) do
 	local note = annotations.get(item)
@@ -227,6 +227,17 @@ for _, item in ipairs(imported_owned.items) do
 	end
 end
 assert(imported_note)
+local imported_records = assert(require("quickfix_review.export").records({
+	list = { kind = "quickfix", id = imported_owned.id },
+}))
+local exported_metadata
+for _, record in ipairs(imported_records) do
+	if record.text == imported_note.text then
+		exported_metadata = record.metadata
+		assert(record.id == nil and record.created_at == nil)
+	end
+end
+assert(vim.deep_equal(exported_metadata, imported_note.metadata))
 
 local updated = assert(notes.import_findings({
 	version = 1,
@@ -235,7 +246,7 @@ local updated = assert(notes.import_findings({
 	},
 }))
 assert(updated.added == 0 and updated.updated == 1 and #updated.errors == 0)
-local updated_owned = assert(lists.find_owned(require("quickreview.scope").id(notes.scope())))
+local updated_owned = assert(lists.find_owned(require("quickfix_review.scope").id(notes.scope())))
 for _, item in ipairs(updated_owned.items) do
 	local note = annotations.get(item)
 	if note and note.id == "agent-001" then
@@ -250,9 +261,9 @@ assert(vim.fn.writefile({ vim.json.encode({
 	version = 1,
 	findings = { { id = "agent-003", path = "README.md", line = 14, text = "Imported through the command." } },
 }) }, import_path) == 0)
-vim.api.nvim_cmd({ cmd = "QuickReviewImport", args = { import_path } }, {})
+vim.api.nvim_cmd({ cmd = "QuickfixReviewImport", args = { import_path } }, {})
 vim.fn.delete(import_path)
-local command_import = assert(lists.find_owned(require("quickreview.scope").id(notes.scope())))
+local command_import = assert(lists.find_owned(require("quickfix_review.scope").id(notes.scope())))
 local command_note
 for _, item in ipairs(command_import.items) do
 	local note = annotations.get(item)
@@ -266,7 +277,7 @@ local partially_imported = assert(notes.import_findings({
 	version = 1,
 	findings = {
 		{ id = "outside", path = "../outside.lua", line = 1, text = "must be rejected" },
-		{ id = "agent-004", path = "SPINOFF.md", line = 1, text = "The valid finding remains importable." },
+		{ id = "agent-004", path = "docs/integrations.md", line = 1, text = "The valid finding remains importable." },
 	},
 }))
 assert(partially_imported.added == 1 and #partially_imported.errors == 1)
@@ -280,4 +291,4 @@ local stale_id = files_list.id + 999
 local stale, stale_err = lists.read({ kind = "quickfix", id = stale_id })
 assert(not stale and stale_err:find("stale quickfix list id", 1, true))
 
-print("quickreview tests passed")
+print("quickfix_review tests passed")

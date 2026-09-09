@@ -5,11 +5,11 @@ function M.detect(bufnr, winid)
 end
 
 function M.location(bufnr, winid)
-	return require("quickreview.resolvers.normal").location(bufnr, winid)
+	return require("quickfix_review.resolvers.normal").location(bufnr, winid)
 end
 
 function M.range_location(bufnr, start_line, stop_line)
-	return require("quickreview.resolvers.normal").range_location(bufnr, start_line, stop_line)
+	return require("quickfix_review.resolvers.normal").range_location(bufnr, start_line, stop_line)
 end
 
 function M.anchor(note)

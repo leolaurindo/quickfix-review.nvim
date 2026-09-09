@@ -1,17 +1,19 @@
 # Integrations
 
-QuickReview has two separate extension surfaces:
+The package keeps responsibilities separate:
 
-- `quickfix_persist` stores native quickfix and location-list snapshots and knows nothing about notes.
-- `quickfix_actions` owns generic native list access and mutations.
-- `quickfix_export` normalizes native lists, formats records, and sends destinations.
-- `quickreview` resolves source locations, annotates list items, maintains the owned review list, and supplies note-aware export text.
+- `quickfix_persist` stores native list snapshots.
+- `quickfix_actions` reads and mutates native lists.
+- `quickfix_export` normalizes, formats, and sends records.
+- `quickfix_review` resolves note locations, stores notes on producer items, mirrors them into the owned notes quickfix list, and selects note text.
 
-Do not write a second note database or identify entries by rendered qf text. Native list IDs and `user_data.quickreview.id` are the identities.
+Notes can originate in source buffers, quickfix/location-list rows, or diff rows.
+Native list IDs and `user_data.quickfix_review.id` identify them; rendered qf text
+is not an API.
 
-## Diff And UI Resolvers
+## Resolvers
 
-Resolvers live under `lua/quickreview/resolvers/` and are registered by the resolver registry. A resolver provides:
+Resolvers are registered under `lua/quickfix_review/resolvers/`:
 
 ```lua
 return {
@@ -19,17 +21,7 @@ return {
   priority = 50,
   renderable = true,
   detect = function(bufnr, winid) end,
-  location = function(bufnr, winid)
-    return {
-      root = "/repo",
-      path = "lua/example.lua",
-      line = 10,
-      line_end = 12,
-      side = "new",
-      revision = nil,
-      hash = nil,
-    }
-  end,
+  location = function(bufnr, winid) end,
   range_location = function(bufnr, start_line, end_line) end,
   anchor = function(location, bufnr)
     return location.line_end or location.line
@@ -37,140 +29,116 @@ return {
 }
 ```
 
-`range_location` is required for transformed diff buffers when exact ranges are desired. The registry does not guess a range mapping when the UI row and source row differ; QuickReview falls back to a file-level note instead of saving incorrect coordinates. `anchor` controls the source-buffer triangle location, and should return the bottom line for ranges.
-
-When a resolver can identify the file but cannot map a visual range, QuickReview saves a file-level note instead of dropping the note. The note has no fabricated line number, so AI/export consumers can still inspect the correct file. Resolvers should implement `range_location` whenever they can provide exact source coordinates.
-
-Register a resolver during setup or from another plugin:
+`range_location` is needed when UI rows do not map directly to source rows;
+otherwise a diff or other transformed row becomes a file-level note. `anchor`
+controls the source mark. A resolver that identifies a file but cannot safely map
+its rows must not invent line coordinates.
+Register a resolver with:
 
 ```lua
-require("quickreview.resolver").register(require("my_resolver"))
+require("quickfix_review.resolver").register(require("my_resolver"))
 ```
 
-The existing adapters cover normal buffers, native diffs, Diffview+, CodeDiff, Differ, diffs.nvim, and Neogit. An unknown URI buffer is also supported when its decoded URI contains an existing absolute file path; it receives a file-level note because its rows cannot be mapped safely to source lines. Historical-side navigation falls back to the stored working-tree path when the original diff UI cannot be recreated.
+Built-in adapters cover normal buffers, native diffs, Diffview+, CodeDiff,
+Differ, diffs.nvim, and Neogit. Unknown absolute-file URIs receive file-level
+notes. Historical-side navigation falls back to the stored worktree path.
 
-For Diffview+, install `dlyongemallo/diffview-plus.nvim` and use its normal `:Diffview...` commands. QuickReview discovers the active Diffview through `diffview.lib`, records old/new side and revision metadata, and rejects ranges in inline layouts where visible rows do not map directly to source rows.
+## Pickers
 
-## Picker Adapters
+`quickfix_review.picker.entries({ source = "owned" })` and
+`entries({ source = "current" })` return native targets, note IDs, paths, ranges,
+note text, and preview coordinates. The built-in note picker uses Snacks or
+`vim.ui.select`; Telescope can consume the same entries without creating an
+aggregate list.
 
-`quickreview.picker.entries({ source = "owned" })` and
-`quickreview.picker.entries({ source = "current" })` return filtered annotated entries. Each entry contains the native list target, note ID, path, range, note text, and file preview coordinates.
+`quickfix_review.search(opts)` delegates native list access and row selection to
+`quickfix_actions.search()`. It searches all current-list entries by path,
+producer text, and attached note text, then focuses the selected native row
+without jumping to its source buffer. `quickfix_actions.search()` provides the
+same behavior for path and producer text only; its `format_item` option controls
+the displayed and searchable text, and `on_confirm` can override selection.
 
-The built-in picker uses Snacks when available:
+## Export extensions
 
-```vim
-:QuickReviewPick
-:QuickReviewPickCurrent
-```
-
-It re-reads the native list and finds the note ID again before jumping. If Snacks is unavailable, it uses `vim.ui.select`. A Telescope adapter can consume the same `entries()` result without creating an aggregate quickfix list.
-
-## Export Extensions
-
-The export pipeline is:
+The pipeline is:
 
 ```text
 native list -> normalized records -> formatter -> destination
 ```
 
-Normalized records contain `index`, `path`, `line`, `line_end`, `col`, `end_col`,
-`text`, `type`, `valid`, and list `kind`. Unavailable fields are omitted. They
-do not contain raw native items or QuickReview note IDs.
+Records contain normalized location/text fields, not raw items or note IDs.
+Review applies canonical note locations and detached JSON-safe `metadata` to its
+records. IDs, versions, and timestamps remain private.
 
-The native `item.text` remains the producer message. QuickReview stores the
-full note in `user_data.quickreview.text`; it does not copy or concatenate
-the producer message into the note. Native qf rendering cannot display an
-arbitrary `user_data` field without taking over the renderer. For export-only
-field selection, pass a callback:
+Use a note-aware selector when needed:
 
 ```lua
-require("quickreview").export({
+require("quickfix_review").export({
   text = function(item, note)
     return note and note.text or item.user_data and item.user_data.message or item.text
   end,
 })
 ```
 
-The underlying generic Export selector receives only `(item, default_text)`;
-QuickReview supplies the `note` argument in its wrapper.
-
-QuickReview also applies a note's canonical source path and range to its own
-records after generic normalization. This preserves diff/source resolver
-locations without exposing note metadata to quickfix-export or mutating the
-native list.
-
-This callback affects the normalized export record only; it does not mutate the
-producer item or its qf display.
-
-Built-in formatters are Markdown and JSON. A formatter module exposes:
+Custom formatters receive `(records, opts)` and return a string, including an
+empty string, or `nil, err`. Named formatters expose `format(records)`. Custom
+destinations expose `name` and `send(payload, opts)`:
 
 ```lua
-return {
-  format = function(records)
-    return "payload"
-  end,
-}
-```
-
-Markdown accepts per-export `prefix` and `suffix` strings:
-
-```lua
-require("quickreview").export({
-  format = "markdown",
-  prefix = "# Review\n\n",
-  suffix = "\nGenerated by Neovim\n",
-})
-```
-
-Built-in Export destinations are clipboard, file, and optional Sidekick. A
-destination exposes:
-
-```lua
-return {
-  name = "my_destination",
-  send = function(payload, opts)
-    return true
-  end,
-}
-```
-
-Register it with:
-
-```lua
-local sender = require("quickreview.sender")
+local sender = require("quickfix_review.sender")
 sender.register(require("my_destination"))
 sender.set_default("my_destination")
 ```
 
-Other plugins call `require("quickfix_actions")` and
-`require("quickfix_export")` directly. `:QuickfixActions...` and
-`:QuickfixExport...` are thin user-facing command wrappers.
+Built-in formats are Markdown and JSON; destinations are clipboard, file, and
+optional Sidekick. Markdown accepts `prefix` and `suffix`, ignores metadata,
+and JSON includes it. A rejected formatter or destination prevents sending and
+clearing.
 
-An explicit `false, err` return is treated as failure, so `ExportAndClear` will not clear after a rejected destination.
+## Native list rules
 
-## Quickfix Semantics
+Targets are `{ kind = "quickfix", id = 42 }` or
+`{ kind = "location", id = 17, winid = 1001 }`. Location `winid` is the owning
+file window. Stale IDs and invalid owners fail. Mutations preserve native title,
+context, index, metadata, and `changedtick` checks.
 
-Normal quickfix and location-list buffers remain native and unmodifiable. QuickReview does not own `quickfixtextfunc`, does not install `BufWriteCmd`, and does not parse rendered qf lines.
+Quickfix buffers remain native and unmodifiable. Review does not own
+`quickfixtextfunc`, `BufWriteCmd`, or rendered-row parsing.
 
-Annotating a producer row adds only `user_data.quickreview` to that native item, then mirrors the annotated entry into the owned `QuickReview` list. The producer item text and metadata remain unchanged. The owned copy uses an empty quickfix type so its display is `path|line|note text`.
+## Quickfix Diffs
 
-The qf triangle and floats are configurable:
+Review consumes version 1 `item.user_data.quickfix_diffs` without requiring the
+producer or parsing `item.text`:
+
+- new-side hunks use new ranges;
+- deletion-only hunks use old ranges and source identity;
+- full-file items become file-level notes;
+- revision and fingerprint labels appear only when needed;
+- each Diffs run creates a fresh native list and never reattaches old notes.
+
+For patch-plus-note output, export the producer target and select both values:
 
 ```lua
-require("quickreview").setup({
-  quickfix = {
-    inline = true,
-    float = {
-      enabled = true,
-      delay = 500,
-      command = true,
-    },
-  },
+local items, err, target = require("quickfix_diffs").open({
+  mode = "head", full_diff = true,
 })
+assert(items, err)
+if target then
+  require("quickfix_review").export({
+    list = target,
+    format = "json",
+    text = function(item, annotation)
+      return annotation and (annotation.text .. "\n\n" .. item.text) or item.text
+    end,
+  })
+end
 ```
 
-`dd` deliberately deletes the current native entry. `QuickReviewDelete` removes the annotation while preserving the producer entry.
+## Persistence and note lifecycle
 
-## Persistence
-
-Use `quickfix_persist` directly for arbitrary named native lists. QuickReview automatically watches only its owned review list. See the sibling plugin README for snapshot namespaces, scope values, restore modes, and watch handles.
+Persist is optional. Review watches only its owned list; use `quickfix_persist`
+directly for arbitrary named lists. Worktree notes use whole-file fingerprints;
+Diffs supplies Git fingerprints. Changed sources produce advisory `stale = true`
+records; `warn_stale = false` suppresses notifications and Markdown stale labels.
+Re-anchoring updates the same note ID and preserves text, creation time, metadata,
+and producer origin. It does not rebase diffs or guess matches.

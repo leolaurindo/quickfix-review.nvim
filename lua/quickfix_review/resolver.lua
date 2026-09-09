@@ -46,7 +46,7 @@ function M.location(bufnr, winid)
 	if ok and value then
 		value.resolver = resolver.name
 		value.renderable = resolver.renderable
-		return require("quickreview.location").canonical(value)
+		return require("quickfix_review.location").canonical(value)
 	end
 end
 
@@ -61,7 +61,7 @@ function M.range_location(bufnr, start_line, stop_line)
 	if ok and value then
 		value.resolver = resolver.name
 		value.renderable = resolver.renderable
-		return require("quickreview.location").canonical(value)
+		return require("quickfix_review.location").canonical(value)
 	end
 end
 

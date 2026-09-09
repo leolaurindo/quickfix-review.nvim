@@ -16,7 +16,7 @@ function M.title(loc)
 	if loc.revision then
 		parts[#parts + 1] = tostring(loc.revision):sub(1, 7)
 	end
-	return #parts > 0 and table.concat(parts, " | ") or "QuickReview"
+	return #parts > 0 and table.concat(parts, " | ") or "Quickfix Review"
 end
 
 function M.note_input(opts, callback)
@@ -37,7 +37,7 @@ function M.note_input(opts, callback)
 		col = math.floor((vim.o.columns - width) / 2),
 	})
 	vim.bo[buf].buftype, vim.bo[buf].bufhidden, vim.bo[buf].filetype = "acwrite", "wipe", "text"
-	local initial = opts.existing and opts.existing.text or ""
+	local initial = opts.existing and opts.existing.text or opts.text or ""
 	vim.api.nvim_buf_set_lines(
 		buf,
 		0,
@@ -69,9 +69,9 @@ function M.note_input(opts, callback)
 	end
 	vim.keymap.set({ "n", "i" }, "<C-s>", save, { buffer = buf, nowait = true })
 	vim.keymap.set("n", "q", save, { buffer = buf, nowait = true })
-	vim.api.nvim_buf_create_user_command(buf, "QuickReviewQuit", save, { nargs = 0 })
+	vim.api.nvim_buf_create_user_command(buf, "QuickfixReviewQuit", save, { nargs = 0 })
 	vim.api.nvim_set_current_win(win)
-	vim.cmd("cnoreabbrev <expr> <buffer> q getcmdtype() ==# ':' && getcmdline() ==# 'q' ? 'QuickReviewQuit' : 'q'")
+	vim.cmd("cnoreabbrev <expr> <buffer> q getcmdtype() ==# ':' && getcmdline() ==# 'q' ? 'QuickfixReviewQuit' : 'q'")
 	vim.cmd("startinsert")
 end
 

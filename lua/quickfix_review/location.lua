@@ -60,6 +60,8 @@ function M.canonical(loc)
 		revision = loc.revision,
 		hash = loc.hash,
 		resolver = loc.resolver,
+		fingerprint = vim.deepcopy(loc.fingerprint),
+		deletion = loc.deletion,
 	}
 end
 

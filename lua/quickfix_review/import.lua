@@ -1,6 +1,6 @@
-local annotations = require("quickreview.annotations")
-local lists = require("quickreview.lists")
-local location = require("quickreview.location")
+local annotations = require("quickfix_review.annotations")
+local lists = require("quickfix_review.lists")
+local location = require("quickfix_review.location")
 
 local M = {}
 
@@ -180,7 +180,7 @@ function M.run(source, opts)
 	if #prepared == 0 then
 		return result
 	end
-	local owned, target = lists.ensure_owned({ title = opts.title or "QuickReview" }, opts.scope_id)
+	local owned, target = lists.ensure_owned({ title = opts.title or "Quickfix Review" }, opts.scope_id)
 	local items = vim.deepcopy(owned.items or {})
 	local by_id, by_location = {}, {}
 	for index, item in ipairs(items) do

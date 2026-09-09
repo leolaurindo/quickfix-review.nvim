@@ -4,7 +4,7 @@ M.name = "neogit"
 M.priority = 70
 M.renderable = false
 
-local location = require("quickreview.location")
+local location = require("quickfix_review.location")
 
 local function status_instance()
 	local ok, status = pcall(require, "neogit.buffers.status")

@@ -1,5 +1,5 @@
 local M = { name = "normal", priority = 0, renderable = true }
-local location = require("quickreview.location")
+local location = require("quickfix_review.location")
 
 function M.detect(bufnr)
 	local name = vim.api.nvim_buf_get_name(bufnr)

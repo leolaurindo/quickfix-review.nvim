@@ -1,6 +1,6 @@
 local M = {}
 
-M.key = "quickreview"
+M.key = "quickfix_review"
 M.version = 1
 
 local function now()
@@ -31,7 +31,7 @@ function M.create(location, text, id, metadata)
 		text = text or "",
 		created_at = stamp,
 		updated_at = stamp,
-		location = vim.deepcopy(location),
+		location = require("quickfix_review.source").capture(location),
 	}
 	if metadata ~= nil then
 		note.metadata = vim.deepcopy(metadata)
@@ -46,13 +46,19 @@ function M.set(item, location, text, existing, metadata)
 		return nil, "cannot annotate an item with non-table user_data"
 	end
 	local old = M.get(item)
+	local previous = existing or old
 	local note = M.create(
 		location,
 		text,
 		existing and existing.id or old and old.id,
 		metadata == nil and old and old.metadata or metadata
 	)
-	note.created_at = existing and existing.created_at or old and old.created_at or note.created_at
+	note.created_at = previous and previous.created_at or note.created_at
+	note.origin = previous and vim.deepcopy(previous.origin) or nil
+	-- Editing text must not acknowledge a changed source as a new anchor.
+	if old and require("quickfix_review.location").equal(old.location, location) then
+		note.location.fingerprint = old.location.fingerprint
+	end
 	item.user_data[M.key] = note
 	return note
 end

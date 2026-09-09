@@ -3,15 +3,17 @@ local M = {}
 M.defaults = {
 	send = "clipboard",
 	send_opts = {},
+	warn_stale = true,
 	actions = { mappings = { qf = false } },
 	export = {},
-	quickfix_title = "QuickReview",
+	quickfix_title = "Quickfix Review",
 	persist_review_list = true,
 	scope_policy = "branch",
 	inline = true,
 	glyph = "▲",
 	float = { enabled = true, delay = 500, permanent = false },
 	quickfix = {
+		prefill = true,
 		inline = true,
 		float = { enabled = true, delay = 500, permanent = false, command = true },
 	},

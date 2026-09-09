@@ -1,7 +1,8 @@
 local M = {}
-local lists = require("quickreview.lists")
-local annotations = require("quickreview.annotations")
-local location = require("quickreview.location")
+local actions = require("quickfix_actions")
+local lists = require("quickfix_review.lists")
+local annotations = require("quickfix_review.annotations")
+local location = require("quickfix_review.location")
 
 function M.entries(opts)
 	opts = opts or {}
@@ -12,7 +13,7 @@ function M.entries(opts)
 	else
 		local owned = lists.find_owned(opts.scope_id)
 		if not owned then
-			return nil, "no QuickReview list"
+			return nil, "no Quickfix Review list"
 		end
 		value, err, resolved = lists.read({ kind = "quickfix", id = owned.id })
 	end
@@ -127,6 +128,31 @@ function M.pick(opts)
 			choose(entries[index])
 		end
 	end)
+end
+
+local function search_format(entry)
+	local path = entry.path or "[no file]"
+	if entry.line then
+		path = ("%s:%s"):format(path, entry.line)
+	end
+	local text = (entry.text or ""):gsub("\n", " ")
+	local note = annotations.get(entry.item)
+	if note then
+		text = ("%s [note: %s]"):format(text, (note.text or ""):gsub("\n", " "))
+	end
+	return ("%s - %s"):format(path, text)
+end
+
+function M.search(opts)
+	opts = opts or {}
+	local search_opts = vim.tbl_extend("force", {
+		prompt = "Search Quickfix Review",
+		format_item = search_format,
+		on_confirm = function(entry)
+			return actions.select(entry.list, entry.index)
+		end,
+	}, opts)
+	return actions.search(search_opts)
 end
 
 return M
