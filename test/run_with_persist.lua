@@ -15,7 +15,38 @@ vim.opt.rtp:prepend(root)
 
 local notes = require("quickfix_review")
 local persist = require("quickfix_persist")
-notes.setup({ persist_review_list = false })
+local scope_module = require("quickfix_review.scope")
+local review_scope = scope_module.resolve("repository")
+assert(persist.write({
+	namespace = "quickfix_review",
+	name = "review",
+	scope = review_scope,
+	snapshot = {
+		version = 1,
+		kind = "quickfix",
+		title = "Quickfix Review",
+		context = { quickfix_review = { version = 1, role = "notes", scope_id = scope_module.id(review_scope) } },
+		items = {},
+	},
+}))
+local save, watch = persist.save, persist.watch
+local saves, watches = 0, 0
+persist.save = function(opts)
+	saves = saves + 1
+	return save(opts)
+end
+persist.watch = function(opts)
+	watches = watches + 1
+	return watch(opts)
+end
+notes.setup({
+	persist_review_list = true,
+	scope_policy = "repository",
+	agent = { response = { watch = false } },
+})
+assert(saves == 0 and watches == 1)
+persist.save, persist.watch = save, watch
+assert(persist.delete({ namespace = "quickfix_review", name = "review", scope = review_scope }))
 
 local file = vim.fs.joinpath(root, "README.md")
 vim.fn.setqflist({}, "r", { title = "persisted", items = { { filename = file, lnum = 1, text = "saved" } } })

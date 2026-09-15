@@ -55,12 +55,13 @@ function M.records(opts)
 	if not records then
 		return nil, err, details
 	end
-	if note_origin ~= nil then
+	if note_origin ~= nil or not opts.include_agent_notes then
 		local filtered = {}
 		for _, record in ipairs(records) do
 			local item = details.snapshot.items[record.index]
 			local annotation = item and annotations.get(item)
-			if annotation and annotations.origin(annotation) == note_origin then
+			local origin = annotation and annotations.origin(annotation)
+			if (note_origin ~= nil and origin == note_origin) or (note_origin == nil and origin ~= "agent") then
 				filtered[#filtered + 1] = record
 			end
 		end
@@ -91,7 +92,7 @@ function M.records(opts)
 				labels[#labels + 1] = "location may be stale"
 			end
 			if annotations.origin(annotation) == "agent" then
-				labels[#labels + 1] = "source: agent"
+				labels[#labels + 1] = "agent"
 			end
 			record.labels = #labels > 0 and labels or nil
 			details.stale = (details.stale or 0) + (stale and 1 or 0)

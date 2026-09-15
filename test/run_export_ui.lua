@@ -13,7 +13,7 @@ local actions = require("quickfix_actions")
 local annotations = require("quickfix_review.annotations")
 local exporter = require("quickfix_review.export")
 local generic = require("quickfix_export")
-review.setup({ persist_review_list = false })
+review.setup({ persist_review_list = false, agent = { response = { watch = false } } })
 local sent
 generic.register({ name = "plan-test", send = function(payload)
 	sent = payload
@@ -27,7 +27,11 @@ for _, case in ipairs({
 	{ kind = "location", prefill = false },
 }) do
 	local kind = case.kind
-	review.setup({ persist_review_list = false, quickfix = { prefill = case.prefill } })
+	review.setup({
+		persist_review_list = false,
+		agent = { response = { watch = false } },
+		quickfix = { prefill = case.prefill },
+	})
 	vim.cmd("only")
 	local owner = vim.api.nvim_get_current_win()
 	local items = {

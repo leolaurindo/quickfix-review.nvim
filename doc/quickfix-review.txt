@@ -57,6 +57,17 @@ Notes are stored in item.user_data.quickfix_review. Producer fields and text
 remain unchanged. The owned Quickfix Review list contains note text and
 locations.
 
+Automatic agent findings are watched for by default. To opt out: >
+  require("quickfix_review").setup({
+    agent = { response = { watch = false } },
+  })
+<
+Sidekick receives the selected review notes directly. The agent writes one
+complete .quickfix-review/agent-response.json payload, using an unused prefixed
+variant if needed, then creates <payload-path>.ready. Review imports and deletes
+both files after success; their disappearance confirms successful consumption.
+Agent notes show a highlighted AGENT badge in native list rows.
+
 |QuickfixReviewSearch| searches every entry in the current native quickfix or
 location list by file path, producer text, and attached note text. With Snacks it
 uses a compact live-search select picker. Confirming a result returns focus to
@@ -92,7 +103,13 @@ COMMANDS                                                       *quickfix-review-
                                                         *QuickfixReviewSearch*
 :QuickfixReviewSearch  Search the current list by path, entry text, or note text.
                                                         *QuickfixReviewExport*
-:QuickfixReviewExport  Export the selected list.
+:QuickfixReviewExport[!]  Export without agent notes; ! includes them.
+                                              *QuickfixReviewSendAgent*
+:QuickfixReviewSendAgent[!]  Send user notes; ! submits immediately.
+                                      *QuickfixReviewSendAgentAndClear*
+:QuickfixReviewSendAgentAndClear[!]  Send user notes and clear all on success.
+                                 *QuickfixReviewReloadAgentResponse*
+:QuickfixReviewReloadAgentResponse  Retry retained agent responses.
                                                    *QuickfixReviewExportUser*
 :QuickfixReviewExportUser  Export user-authored notes only.
                                                   *QuickfixReviewExportAgent*
@@ -100,15 +117,18 @@ COMMANDS                                                       *quickfix-review-
                                                     *QuickfixReviewExportList*
 :QuickfixReviewExportList  Export the current native list.
                                                *QuickfixReviewExportAndClear*
-:QuickfixReviewExportAndClear  Export, then clear on success.
+:QuickfixReviewExportAndClear[!]  Export and clear matching notes; ! includes agents.
                                                          *QuickfixReviewClear*
 :QuickfixReviewClear  Clear annotations or owned entries.
+                                              *QuickfixReviewClearAgent*
+:QuickfixReviewClearAgent  Clear agent-authored notes in this review scope.
                                                      *QuickfixReviewSaveList*
 :QuickfixReviewSaveList {name}  Save the selected native list.
                                                      *QuickfixReviewLoadList*
 :QuickfixReviewLoadList {name}  Load a named native list.
                                                         *QuickfixReviewImport*
-:QuickfixReviewImport {file}  Import findings from JSON.
+:QuickfixReviewImport [{file}]  Import findings from JSON. Without a file, use
+                                .quickfix-review/agent-response.json.
                                                           *QuickfixReviewQuit*
 :QuickfixReviewQuit  Save and close the note editor (buffer-local).
                                                           *QuickfixReviewHide*
@@ -122,13 +142,28 @@ COMMANDS                                                       *quickfix-review-
                                                           *QuickfixReviewPrev*
 :QuickfixReviewPrev  Pick the previous note.
                                                           *QuickfixReviewSend*
-:QuickfixReviewSend  Export through the configured destination.
+:QuickfixReviewSend[!]  Send without agent notes; ! includes them.
 
 EXPORT                                                         *quickfix-review-export*
 
+From a quickfix/location-list window, commands target the current list;
+elsewhere they target the owned list for the active scope.
+
+General export/send commands retain unannotated producer rows and omit agent
+notes by default. Their ! variants include agent notes. ExportUser and
+ExportAgent select only annotated notes of that origin. SendAgent always sends
+only user notes; its ! means submit immediately.
+
+ExportAndClear clears user notes only after successful export; its ! includes
+and clears agent notes. SendAgentAndClear sends user notes, then clears all
+notes in the selected target after success; its ! means submit immediately.
+Failures never clear notes, and clearing annotations never deletes native rows.
+Clearing a producer list also removes owned mirrors. Clearing the owned list
+does not rewrite annotations still carried by another native producer list.
+
 Built-in formats are markdown and json. Destinations are clipboard, file, and
-optional sidekick. Agent-authored Markdown records include a [source: agent]
-label; JSON and custom formats receive annotation metadata. Use
+optional sidekick. Included agent Markdown records have an [agent] label;
+JSON and custom formats receive annotation metadata. Use
 text(item, note, default_text) to choose note or producer text. See
 |quickfix-export.nvim| for generic export contracts.
 

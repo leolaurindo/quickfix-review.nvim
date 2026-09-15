@@ -2,6 +2,15 @@
 
 All notable changes to Quickfix Review are documented here.
 
+## Unreleased
+
+### Added
+
+- One-off Sidekick submission, including a send-and-clear variant, for ephemeral review attention points.
+- A default-on, consumed agent-response mailbox with opt-out configuration, best-effort local Git exclusion, and atomic-write handling.
+- Agent-note clearing and default export filtering with explicit opt-in inclusion.
+- Colored `AGENT` provenance badges in native quickfix and location-list rows.
+
 ## [0.1.0] - 2026-09-09
 
 Initial public release.

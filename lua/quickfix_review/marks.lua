@@ -9,6 +9,7 @@ local hover_win
 local glyph, float_enabled, float_delay, float_permanent = "▲", true, 500, false
 local quickfix_inline, quickfix_float_enabled, quickfix_float_delay, quickfix_float_permanent, quickfix_command =
 	true, true, 500, false, true
+local agent_label_enabled, agent_label_text = true, " AGENT "
 
 local function close_hover()
 	if hover_win and vim.api.nvim_win_is_valid(hover_win) then
@@ -68,15 +69,20 @@ function M.setup(opts)
 	local quickfix = opts.quickfix or {}
 	local quickfix_float = quickfix.float or {}
 	quickfix_inline = quickfix.inline ~= false
+	local agent_label = quickfix.agent_label or {}
+	agent_label_enabled = agent_label.enabled ~= false
+	agent_label_text = agent_label.text == nil and " AGENT " or agent_label.text
 	quickfix_float_enabled = quickfix_float.enabled ~= false
 	quickfix_float_delay = quickfix_float.delay or 500
 	quickfix_float_permanent = quickfix_float.permanent == true
 	quickfix_command = quickfix_float.command ~= false
 	vim.api.nvim_set_hl(0, "QuickfixReviewMark", { link = "DiagnosticInfo" })
+	vim.api.nvim_set_hl(0, "QuickfixReviewAgent", { link = "DiagnosticHint", default = true })
 	vim.api.nvim_create_autocmd("ColorScheme", {
 		group = vim.api.nvim_create_augroup("QuickfixReviewHighlights", { clear = true }),
 		callback = function()
 			vim.api.nvim_set_hl(0, "QuickfixReviewMark", { link = "DiagnosticInfo" })
+			vim.api.nvim_set_hl(0, "QuickfixReviewAgent", { link = "DiagnosticHint", default = true })
 		end,
 	})
 	visible = configured and enabled
@@ -97,13 +103,19 @@ function M.render(bufnr)
 			and type(current.list.context) == "table"
 			and type(current.list.context.quickfix_review) == "table"
 			and current.list.context.quickfix_review.role == "notes"
-		if current and not owned then
+		if current then
 			local line_count = vim.api.nvim_buf_line_count(bufnr)
 			for index, item in ipairs(current.items) do
 				local note = annotations.get(item)
-				if note and index <= line_count and glyph and glyph ~= "" then
+				local text, highlight
+				if note and annotations.origin(note) == "agent" and agent_label_enabled then
+					text, highlight = agent_label_text, "QuickfixReviewAgent"
+				elseif note and not owned then
+					text, highlight = glyph, "QuickfixReviewMark"
+				end
+				if text and text ~= "" and index <= line_count then
 					pcall(vim.api.nvim_buf_set_extmark, bufnr, namespace, index - 1, 0, {
-						virt_text = { { "  " .. glyph, "QuickfixReviewMark" } },
+						virt_text = { { "  " .. text, highlight } },
 						virt_text_pos = "eol",
 						hl_mode = "combine",
 					})
@@ -156,11 +168,15 @@ function M.hover_qf(bufnr)
 		return
 	end
 	local lines = vim.split(note.text or "", "\n", { plain = true })
+	local title = " Quickfix note "
+	if annotations.origin(note) == "agent" then
+		title = " Agent note "
+	end
 	local _, win = vim.lsp.util.open_floating_preview(lines, "text", {
 		border = "rounded",
 		focusable = false,
 		max_width = math.min(80, vim.o.columns - 8),
-		title = " Quickfix note ",
+		title = title,
 		title_pos = "center",
 		close_events = { "CursorMoved", "InsertCharPre", "BufLeave", "WinLeave" },
 	})

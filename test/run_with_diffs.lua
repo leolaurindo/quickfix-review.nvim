@@ -34,7 +34,11 @@ local annotations = require("quickfix_review.annotations")
 local exporter = require("quickfix_review.export")
 local ui = require("quickfix_review.ui")
 local marks = require("quickfix_review.marks")
-review.setup({ persist_review_list = false, quickfix = { prefill = false } })
+review.setup({
+	persist_review_list = false,
+	agent = { response = { watch = false } },
+	quickfix = { prefill = false },
+})
 local diffs = require("quickfix_diffs")
 diffs.setup({ open = true })
 

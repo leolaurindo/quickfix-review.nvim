@@ -95,6 +95,16 @@ optional Sidekick. Markdown accepts `prefix` and `suffix`, ignores metadata,
 and JSON includes it. A rejected formatter or destination prevents sending and
 clearing.
 
+`send_agent({ submit = true })` uses the normal Markdown pipeline to send
+selected user-authored review notes through Sidekick. General exports also omit
+agent notes unless `include_agent_notes = true`; explicit origin filters remain
+available. The agent returns one complete existing-schema payload through the
+watched `.quickfix-review/agent-response.json` mailbox, using an unused prefixed
+variant if that path exists, then creates a matching `.ready` file. Git exclusion
+is best-effort and warns on failure. Review imports through the normal merge path
+and deletes both files after success. Their disappearance confirms successful
+consumption, not failure. The mailbox is not persistent or synchronized state.
+
 ## Native list rules
 
 Targets are `{ kind = "quickfix", id = 42 }` or
