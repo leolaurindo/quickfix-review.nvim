@@ -70,7 +70,7 @@ assert(worktree.location.revision == nil and worktree.location.hash == nil)
 local ns = vim.api.nvim_get_namespaces().quickfix_review
 vim.cmd("wincmd p")
 marks.render()
-assert(#vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, {}) == 1)
+assert(#vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, {}) == 2)
 
 local owned = assert(lists.find_owned())
 local saved = assert(lists.read({ kind = "quickfix", id = owned.id }))
@@ -115,10 +115,10 @@ assert(worktree_records[1].stale and worktree_records[1].labels[1] == "location 
 vim.fn.writefile({ "one", "TWO", "THREE", "four", "five" }, file)
 assert(not assert(exporter.records({ list = producer }))[1].stale)
 
--- Index/commit notes must not add triangles to the working-tree source buffer.
+-- Index/commit notes must not add indicators to the working-tree source buffer.
 vim.cmd("wincmd p")
 marks.render()
-assert(#vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, {}) == 1)
+assert(#vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, {}) == 2)
 
 vim.fn.delete(file)
 local deletion, deletion_target = annotate({ mode = "head" }, "restore this file")

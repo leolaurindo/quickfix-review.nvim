@@ -9,13 +9,13 @@ M.defaults = {
 	quickfix_title = "Quickfix Review",
 	persist_review_list = true,
 	scope_policy = "branch",
+	nerd_font = true,
 	inline = true,
-	glyph = "▲",
 	float = { enabled = true, delay = 500, permanent = false },
 	quickfix = {
 		prefill = true,
 		inline = true,
-		agent_label = { enabled = true, text = " AGENT " },
+		agent_label = { enabled = true },
 		float = { enabled = true, delay = 500, permanent = false, command = true },
 	},
 	agent = {

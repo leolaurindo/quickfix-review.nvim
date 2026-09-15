@@ -53,11 +53,15 @@ require("quickfix_review").setup()
 ```lua
 require("quickfix_review").setup({
   send = "clipboard",
+  nerd_font = true, -- Set false when Nerd Font glyphs are unavailable.
 })
 ```
 
 Review uses Lua APIs to integrate with sibling plugins. Commands are user-facing
-wrappers. A note is stored on its native producer item in
+wrappers. Neovim cannot detect the font selected by a terminal, so Nerd Font
+icons are enabled by default; set `nerd_font = false` to use `✎` and `AGENT`
+portable fallbacks. Explicit `glyph` and `quickfix.agent_label.text` values still
+override either mode. A note is stored on its native producer item in
 `item.user_data.quickfix_review` and mirrored into the branch-scoped
 `Quickfix Review` quickfix list. Producer text and metadata stay unchanged.
 
@@ -164,14 +168,20 @@ can ignore the path manually.
 | `:QuickfixReviewLoadList <name>` | Load a named native list |
 | `:QuickfixReviewImport [file]` | Import findings from JSON; defaults to the repository mailbox path |
 | `:QuickfixReviewHide` / `:QuickfixReviewShow` | Toggle source marks |
-| `:QuickfixReviewHover` | Show the qf row's note |
+| `:QuickfixReviewHover` | Show a qf-row note or a source note containing the cursor |
+| `:QuickfixReviewHoverAll` | Toggle persistent note overlays at visible source-range endpoints |
 | `:QuickfixReviewQuit` | Save and close the note editor (buffer-local) |
 | `:QuickfixReviewNext` / `:QuickfixReviewPrev` | Pick the next/previous note |
 | `:QuickfixReviewSend[!]` | Send without agent notes; `!` includes them |
 
 `QuickfixReviewAdd` accepts a range. `QuickfixReviewReanchor` accepts a range
 and `!` for file scope. Notes can be added from a source buffer, a quickfix row,
-a location-list row, or a diff row.
+a location-list row, or a diff row. Range indicators and automatic source hover
+appear at both endpoints; hover does not open while moving through every interior
+line. Run `:QuickfixReviewHover` explicitly to show notes whose range contains
+the cursor. In a source window, `:QuickfixReviewHoverAll` toggles persistent
+per-note overlays at visible endpoints; scrolling hides off-screen notes and
+reveals newly visible ones, while leaving the window disables the overlays.
 
 ### Export, send, and clear semantics
 
@@ -235,12 +245,13 @@ Defaults:
 | `quickfix_title` | `"Quickfix Review"` | Owned notes-list title |
 | `persist_review_list` | `true` | Watch the owned notes list when Persist is available |
 | `scope_policy` | `"branch"` | `branch`, `repository`, or `custom` note scope |
+| `nerd_font` | `true` | Use Nerd Font pencil and robot glyphs; set `false` for portable fallbacks |
 | `inline` | `true` | Show source note marks |
-| `glyph` | `"▲"` | Source mark glyph |
+| `glyph` | Nerd Font pencil or `✎` | Override the source note glyph |
 | `float` | `{ enabled = true, delay = 500, permanent = false }` | Source note hover |
 | `quickfix.prefill` | `true` | Start new qf notes with producer text |
 | `quickfix.inline` | `true` | Show marks in qf buffers |
-| `quickfix.agent_label` | `{ enabled = true, text = " AGENT " }` | Colored provenance badge for agent notes |
+| `quickfix.agent_label` | `{ enabled = true }` | Nerd Font robot or `AGENT` fallback; `text` overrides it |
 | `quickfix.float` | `{ enabled = true, delay = 500, permanent = false, command = true }` | qf note hover |
 | `agent.protect_git` | `true` | Best-effort repository-local Git exclusion |
 | `agent.response.watch` | `true` | Watch and automatically import responses; set to `false` to opt out |
@@ -322,8 +333,10 @@ Each finding requires `text` and a repository-relative `path`; `line` and
 without IDs match by location. `severity`, `confidence`, `category`, `evidence`,
 and `suggestion` are retained in `note.metadata`. Imported agent findings use
 `metadata.origin = "agent"`; existing notes without an origin are treated as
-user-authored. Agent notes display a highlighted `AGENT` badge in producer and
-owned quickfix/location-list rows without changing native item text.
+user-authored. Agent notes use the robot glyph in source and quickfix/location-list
+buffers; user notes use the pencil in both. Without Nerd Fonts they fall back to
+`AGENT` and `✎`. Indicators share the same theme-aware color and never change
+native item text.
 
 ```json
 {
