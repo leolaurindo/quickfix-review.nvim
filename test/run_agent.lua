@@ -17,7 +17,7 @@ vim.opt.rtp:prepend(plugin_root)
 local root = vim.fn.tempname()
 vim.fn.mkdir(root, "p")
 assert(vim.system({ "git", "init", "-q", root }):wait().code == 0)
-assert(vim.fn.writefile({ "agent test" }, vim.fs.joinpath(root, "README.md")) == 0)
+assert(vim.fn.writefile({ "one", "two", "three", "four", "five" }, vim.fs.joinpath(root, "README.md")) == 0)
 vim.cmd.cd(vim.fn.fnameescape(root))
 
 local notes = require("quickfix_review")
@@ -96,6 +96,7 @@ local response = {
 		{
 			path = "README.md",
 			line = 1,
+			line_end = 3,
 			text = "Agent response",
 			metadata = { origin = "user" },
 		},
@@ -222,17 +223,47 @@ notes.open_list()
 local qfbuf = vim.api.nvim_get_current_buf()
 marks.render(qfbuf)
 local namespace = vim.api.nvim_get_namespaces().quickfix_review
-local extmarks = vim.api.nvim_buf_get_extmarks(qfbuf, namespace, 0, -1, { details = true })
-local found_badge = false
-for _, extmark in ipairs(extmarks) do
-	local virt_text = extmark[4].virt_text
-	if virt_text and virt_text[1] and virt_text[1][1]:find("AGENT", 1, true) then
-		assert(virt_text[1][2] == "QuickfixReviewAgent")
-		assert(extmark[4].hl_mode == "combine")
-		found_badge = true
+local function has_marker(bufnr, text, combined)
+	local extmarks = vim.api.nvim_buf_get_extmarks(bufnr, namespace, 0, -1, { details = true })
+	for _, extmark in ipairs(extmarks) do
+		local virt_text = extmark[4].virt_text
+		if virt_text and virt_text[1] and virt_text[1][1]:find(text, 1, true) then
+			assert(virt_text[1][2] == "QuickfixReviewMark")
+			assert(not combined or extmark[4].hl_mode == "combine")
+			return true
+		end
 	end
+	return false
 end
-assert(found_badge)
+assert(has_marker(qfbuf, "󰚩", true))
+assert(has_marker(qfbuf, "󰏫", true))
+marks.setup({ nerd_font = false })
+marks.render(qfbuf)
+assert(has_marker(qfbuf, "AGENT", true))
+assert(has_marker(qfbuf, "✎", true))
+marks.setup(require("quickfix_review.config").get())
+
+vim.cmd("cclose")
+vim.cmd.edit(filename)
+marks.render(0)
+assert(has_marker(0, "󰚩"))
+assert(has_marker(0, "󰏫"))
+local preview = vim.lsp.util.open_floating_preview
+local previews = 0
+vim.lsp.util.open_floating_preview = function()
+	previews = previews + 1
+end
+vim.api.nvim_win_set_cursor(0, { 2, 0 })
+marks.hover(0)
+assert(previews == 0)
+marks.hover(0, { force = true })
+assert(previews == 1)
+vim.api.nvim_win_set_cursor(0, { 1, 0 })
+marks.hover(0)
+vim.api.nvim_win_set_cursor(0, { 3, 0 })
+marks.hover(0)
+assert(previews == 3)
+vim.lsp.util.open_floating_preview = preview
 
 assert(notes.clear_agent_reviews())
 owned = assert(lists.find_owned(require("quickfix_review.scope").id(notes.scope())))

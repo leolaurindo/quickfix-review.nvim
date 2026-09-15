@@ -9,7 +9,7 @@ All notable changes to Quickfix Review are documented here.
 - One-off Sidekick submission, including a send-and-clear variant, for ephemeral review attention points.
 - A default-on, consumed agent-response mailbox with opt-out configuration, best-effort local Git exclusion, and atomic-write handling.
 - Agent-note clearing and default export filtering with explicit opt-in inclusion.
-- Colored `AGENT` provenance badges in native quickfix and location-list rows.
+- Theme-aware Nerd Font pencil and robot indicators, with portable fallbacks, for user and agent notes.
 
 ## [0.1.0] - 2026-09-09
 

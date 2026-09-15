@@ -34,7 +34,7 @@ lazy.nvim: >
       "leolaurindo/quickfix-actions.nvim",
       "leolaurindo/quickfix-export.nvim",
     },
-    opts = {},
+    opts = { nerd_font = true },
   }
 <
 
@@ -51,7 +51,11 @@ Add Persist for automatic note-list persistence and Diffs for diff metadata.
 
 SETUP                                                          *quickfix-review-setup*
 
-  require("quickfix_review").setup({ send = "clipboard" })
+  require("quickfix_review").setup({ send = "clipboard", nerd_font = true })
+
+Neovim cannot detect the terminal font. Set nerd_font=false to use the portable
+pencil and AGENT fallbacks. Explicit glyph and quickfix.agent_label.text values
+override these defaults. Both note and agent indicators use QuickfixReviewMark.
 
 Notes are stored in item.user_data.quickfix_review. Producer fields and text
 remain unchanged. The owned Quickfix Review list contains note text and
@@ -66,7 +70,10 @@ Sidekick receives the selected review notes directly. The agent writes one
 complete .quickfix-review/agent-response.json payload, using an unused prefixed
 variant if needed, then creates <payload-path>.ready. Review imports and deletes
 both files after success; their disappearance confirms successful consumption.
-Agent notes show a highlighted AGENT badge in native list rows.
+Agent notes use the robot glyph in source and native list rows; user notes use
+the pencil. Without Nerd Fonts they fall back to AGENT and a portable pencil.
+Automatic source hover appears only at range endpoints. Use
+|QuickfixReviewHover| to show a note from any line inside its range.
 
 |QuickfixReviewSearch| searches every entry in the current native quickfix or
 location list by file path, producer text, and attached note text. With Snacks it
@@ -136,7 +143,7 @@ COMMANDS                                                       *quickfix-review-
                                                           *QuickfixReviewShow*
 :QuickfixReviewShow  Show source marks.
                                                          *QuickfixReviewHover*
-:QuickfixReviewHover  Show the qf row's note.
+:QuickfixReviewHover  Show a qf-row note or source note containing the cursor.
                                                           *QuickfixReviewNext*
 :QuickfixReviewNext  Pick the next note.
                                                           *QuickfixReviewPrev*

@@ -130,7 +130,7 @@ notes.add()
 qf_ui.note_input = qf_input
 	local qf_ns = vim.api.nvim_get_namespaces().quickfix_review
 local qf_marks = vim.api.nvim_buf_get_extmarks(0, qf_ns, 0, -1, { details = true })
-assert(#qf_marks == 1 and qf_marks[1][4].virt_text[1][1] == "  ▲")
+assert(#qf_marks == 1 and qf_marks[1][4].virt_text[1][1] == "  󰏫")
 local qf_target = { kind = "quickfix", id = vim.fn.getqflist({ id = 0 }).id }
 assert(notes.clear_annotations({ list = qf_target }))
 assert(#vim.api.nvim_buf_get_extmarks(0, qf_ns, 0, -1, { details = true }) == 0)
