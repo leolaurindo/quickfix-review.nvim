@@ -20,6 +20,21 @@ local annotations = require("quickfix_review.annotations")
 local sender = require("quickfix_review.sender")
 local resolver = require("quickfix_review.resolver")
 
+local system = vim.system
+local git_calls = 0
+vim.system = function(args)
+	git_calls = git_calls + 1
+	local stdout = args[2] == "rev-parse" and args[3] == "--show-toplevel" and root .. "\n" or "main\n"
+	return { wait = function()
+		return { code = 0, stdout = stdout }
+	end }
+end
+assert(require("quickfix_review.scope").resolve("repository", nil, root).root == root)
+assert(git_calls == 1)
+assert(require("quickfix_review.scope").resolve("branch", nil, root).branch == "main")
+assert(git_calls == 3)
+vim.system = system
+
 notes.setup({ persist_review_list = false, agent = { response = { watch = false } } })
 assert(vim.fn.exists(":QuickfixReviewAdd") == 2)
 assert(vim.fn.exists(":QuickfixReviewImport") == 2)

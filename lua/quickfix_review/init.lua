@@ -44,7 +44,7 @@ local function scope_id()
 	return current_scope and scope.id(current_scope)
 end
 
-local function persist_review()
+local function persist_review(save)
 	if not config.get().persist_review_list or not current_scope then
 		return false
 	end
@@ -57,13 +57,19 @@ local function persist_review()
 		pcall(persist.unwatch, review_watch)
 		review_watch = nil
 	end
-	local handle, err = persist.save({
+	local opts = {
 		namespace = "quickfix_review",
 		name = "review",
 		scope = current_scope,
 		target = { kind = "quickfix", id = owned.id },
 		watch = true,
-	})
+	}
+	local handle, err
+	if save == false then
+		handle, err = persist.watch(opts)
+	else
+		handle, err = persist.save(opts)
+	end
 	if not handle then
 		notify("could not persist review list: " .. tostring(err), vim.log.levels.WARN)
 		return false
@@ -99,7 +105,7 @@ local function restore_review()
 	if active.id and active.id ~= restored.id and active.nr then
 		pcall(vim.cmd, "silent " .. active.nr .. "chistory")
 	end
-	persist_review()
+	persist_review(false)
 end
 
 local function clear_old_scope(old)

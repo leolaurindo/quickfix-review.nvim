@@ -8,15 +8,15 @@ end
 function M.resolve(policy, custom, cwd)
 	cwd = cwd or vim.fn.getcwd()
 	local root = git({ "git", "rev-parse", "--show-toplevel" }, cwd) or vim.fs.normalize(cwd)
-	local branch = git({ "git", "symbolic-ref", "--short", "HEAD" }, root)
-	if not branch then
-		branch = git({ "git", "rev-parse", "--short", "HEAD" }, root)
+	if policy == "repository" then
+		return { policy = "repository", root = root }
 	end
 	if policy == "custom" and type(custom) == "table" then
 		return { policy = "custom", root = vim.fs.normalize(custom.root or root), branch = custom.branch }
 	end
-	if policy == "repository" then
-		return { policy = "repository", root = root }
+	local branch = git({ "git", "symbolic-ref", "--short", "HEAD" }, root)
+	if not branch then
+		branch = git({ "git", "rev-parse", "--short", "HEAD" }, root)
 	end
 	return { policy = "branch", root = root, branch = branch }
 end
