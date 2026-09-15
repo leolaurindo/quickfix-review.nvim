@@ -1,11 +1,15 @@
 ---
 name: quickfix-review
-description: Use when the user asks for a code review and actionable findings should be reported through Quickfix Review; produce importable, versioned JSON.
+description: Use only when the user explicitly asks to write review notes to Quickfix Review, qf-review, or Neovim, or when a Sidekick message explicitly requests a Quickfix Review response; produce importable, versioned JSON.
 ---
 
 # Quickfix Review
 
-Use this skill when findings should appear in the Quickfix Review list.
+Use this skill only when the user explicitly requests Quickfix Review output, such
+as "write notes to Quickfix Review", "use qf-review", or "write review notes to
+my Neovim". A generic request for a code review does not activate this skill and
+must not create Quickfix Review files. A Sidekick message that explicitly asks
+for a Quickfix Review response is also an explicit request.
 
 ## Workflow
 
