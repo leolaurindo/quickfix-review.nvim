@@ -169,16 +169,19 @@ can ignore the path manually.
 | `:QuickfixReviewImport [file]` | Import findings from JSON; defaults to the repository mailbox path |
 | `:QuickfixReviewHide` / `:QuickfixReviewShow` | Toggle source marks |
 | `:QuickfixReviewHover` | Show a qf-row note or a source note containing the cursor |
+| `:QuickfixReviewHoverAll` | Toggle persistent note overlays at visible source-range endpoints |
 | `:QuickfixReviewQuit` | Save and close the note editor (buffer-local) |
 | `:QuickfixReviewNext` / `:QuickfixReviewPrev` | Pick the next/previous note |
 | `:QuickfixReviewSend[!]` | Send without agent notes; `!` includes them |
 
 `QuickfixReviewAdd` accepts a range. `QuickfixReviewReanchor` accepts a range
 and `!` for file scope. Notes can be added from a source buffer, a quickfix row,
-a location-list row, or a diff row. Automatic source hover remains limited to a
-note's range endpoints; it does not open while moving through every interior
+a location-list row, or a diff row. Range indicators and automatic source hover
+appear at both endpoints; hover does not open while moving through every interior
 line. Run `:QuickfixReviewHover` explicitly to show notes whose range contains
-the cursor.
+the cursor. In a source window, `:QuickfixReviewHoverAll` toggles persistent
+per-note overlays at visible endpoints; scrolling hides off-screen notes and
+reveals newly visible ones, while leaving the window disables the overlays.
 
 ### Export, send, and clear semantics
 

@@ -17,7 +17,11 @@ vim.opt.rtp:prepend(plugin_root)
 local root = vim.fn.tempname()
 vim.fn.mkdir(root, "p")
 assert(vim.system({ "git", "init", "-q", root }):wait().code == 0)
-assert(vim.fn.writefile({ "one", "two", "three", "four", "five" }, vim.fs.joinpath(root, "README.md")) == 0)
+local source_lines = {}
+for i = 1, 20 do
+	source_lines[i] = ({ "one", "two", "three", "four", "five" })[i] or ("line " .. i)
+end
+assert(vim.fn.writefile(source_lines, vim.fs.joinpath(root, "README.md")) == 0)
 vim.cmd.cd(vim.fn.fnameescape(root))
 
 local notes = require("quickfix_review")
@@ -32,6 +36,7 @@ assert(vim.fn.exists(":QuickfixReviewSendAgent") == 2)
 assert(vim.fn.exists(":QuickfixReviewSendAgentAndClear") == 2)
 assert(vim.fn.exists(":QuickfixReviewClearAgent") == 2)
 assert(vim.fn.exists(":QuickfixReviewReloadAgentResponse") == 2)
+assert(vim.fn.exists(":QuickfixReviewHoverAll") == 2)
 
 local nongit = vim.fn.tempname()
 vim.fn.mkdir(nongit, "p")
@@ -223,17 +228,21 @@ notes.open_list()
 local qfbuf = vim.api.nvim_get_current_buf()
 marks.render(qfbuf)
 local namespace = vim.api.nvim_get_namespaces().quickfix_review
-local function has_marker(bufnr, text, combined)
+local function marker_count(bufnr, text, combined)
+	local count = 0
 	local extmarks = vim.api.nvim_buf_get_extmarks(bufnr, namespace, 0, -1, { details = true })
 	for _, extmark in ipairs(extmarks) do
 		local virt_text = extmark[4].virt_text
 		if virt_text and virt_text[1] and virt_text[1][1]:find(text, 1, true) then
 			assert(virt_text[1][2] == "QuickfixReviewMark")
 			assert(not combined or extmark[4].hl_mode == "combine")
-			return true
+			count = count + 1
 		end
 	end
-	return false
+	return count
+end
+local function has_marker(bufnr, text, combined)
+	return marker_count(bufnr, text, combined) > 0
 end
 assert(has_marker(qfbuf, "󰚩", true))
 assert(has_marker(qfbuf, "󰏫", true))
@@ -246,8 +255,8 @@ marks.setup(require("quickfix_review.config").get())
 vim.cmd("cclose")
 vim.cmd.edit(filename)
 marks.render(0)
-assert(has_marker(0, "󰚩"))
-assert(has_marker(0, "󰏫"))
+assert(marker_count(0, "󰚩") == 2)
+assert(marker_count(0, "󰏫") == 1)
 local preview = vim.lsp.util.open_floating_preview
 local previews = 0
 vim.lsp.util.open_floating_preview = function()
@@ -264,6 +273,46 @@ vim.api.nvim_win_set_cursor(0, { 3, 0 })
 marks.hover(0)
 assert(previews == 3)
 vim.lsp.util.open_floating_preview = preview
+
+local source_win = vim.api.nvim_get_current_win()
+local function overlay_count()
+	local count = 0
+	for _, winid in ipairs(vim.api.nvim_list_wins()) do
+		local config = vim.api.nvim_win_get_config(winid)
+		if config.relative == "win" and config.win == source_win then
+			count = count + 1
+		end
+	end
+	return count
+end
+local function scroll_to(line)
+	vim.api.nvim_win_set_cursor(source_win, { line, 0 })
+	vim.api.nvim_win_call(source_win, function()
+		vim.cmd("normal! zt")
+	end)
+	vim.api.nvim_exec_autocmds("WinScrolled", { modeline = false })
+end
+vim.api.nvim_win_set_height(source_win, 3)
+scroll_to(15)
+vim.cmd("QuickfixReviewHoverAll")
+assert(overlay_count() == 0)
+scroll_to(1)
+assert(overlay_count() == 2)
+scroll_to(15)
+assert(overlay_count() == 0)
+scroll_to(3)
+assert(overlay_count() == 1)
+vim.cmd("QuickfixReviewHoverAll")
+assert(overlay_count() == 0)
+scroll_to(1)
+assert(overlay_count() == 0)
+vim.cmd("QuickfixReviewHoverAll")
+assert(overlay_count() == 2)
+vim.cmd("vnew")
+assert(overlay_count() == 0)
+vim.cmd("close")
+scroll_to(1)
+assert(overlay_count() == 0)
 
 assert(notes.clear_agent_reviews())
 owned = assert(lists.find_owned(require("quickfix_review.scope").id(notes.scope())))

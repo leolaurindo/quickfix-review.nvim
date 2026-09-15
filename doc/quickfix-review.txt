@@ -72,8 +72,10 @@ variant if needed, then creates <payload-path>.ready. Review imports and deletes
 both files after success; their disappearance confirms successful consumption.
 Agent notes use the robot glyph in source and native list rows; user notes use
 the pencil. Without Nerd Fonts they fall back to AGENT and a portable pencil.
-Automatic source hover appears only at range endpoints. Use
-|QuickfixReviewHover| to show a note from any line inside its range.
+Range indicators and automatic source hover appear at both endpoints. Use
+|QuickfixReviewHover| from any line inside a range. In a source window,
+|QuickfixReviewHoverAll| toggles persistent per-note overlays at visible
+endpoints. Scrolling updates them; leaving the window disables them.
 
 |QuickfixReviewSearch| searches every entry in the current native quickfix or
 location list by file path, producer text, and attached note text. With Snacks it
@@ -144,6 +146,8 @@ COMMANDS                                                       *quickfix-review-
 :QuickfixReviewShow  Show source marks.
                                                          *QuickfixReviewHover*
 :QuickfixReviewHover  Show a qf-row note or source note containing the cursor.
+                                                      *QuickfixReviewHoverAll*
+:QuickfixReviewHoverAll  Toggle persistent overlays at visible source endpoints.
                                                           *QuickfixReviewNext*
 :QuickfixReviewNext  Pick the next note.
                                                           *QuickfixReviewPrev*

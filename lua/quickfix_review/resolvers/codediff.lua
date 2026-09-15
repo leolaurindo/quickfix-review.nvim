@@ -71,7 +71,7 @@ function M.location(bufnr, winid)
 end
 
 function M.anchor(note)
-	return note.line
+	return note.line_end or note.line
 end
 
 function M.on_attach(callback)
