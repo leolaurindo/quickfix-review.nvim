@@ -22,7 +22,7 @@ local exporter = require("quickfix_review.export")
 local source = require("quickfix_review.source")
 local mover = require("quickfix_review.reanchor")
 local ui = require("quickfix_review.ui")
-review.setup({ persist_review_list = false })
+review.setup({ persist_review_list = false, agent = { response = { watch = false } } })
 assert(vim.fn.exists(":QuickfixReviewAddFile") == 2)
 assert(vim.fn.exists(":QuickfixReviewReanchor") == 2)
 assert(vim.fn.exists(":QuickfixReviewSearch") == 2)
@@ -99,11 +99,11 @@ vim.notify = function(message, level)
 end
 assert(review.export({ list = line_note.list, destination = "notes-test" }))
 assert(warnings == 1 and sent:find("[location may be stale]", 1, true))
-review.setup({ persist_review_list = false, warn_stale = false })
+review.setup({ persist_review_list = false, warn_stale = false, agent = { response = { watch = false } } })
 assert(review.export({ list = line_note.list, destination = "notes-test" }))
 assert(warnings == 1 and not sent:find("stale", 1, true))
 vim.notify = notify
-review.setup({ persist_review_list = false })
+review.setup({ persist_review_list = false, agent = { response = { watch = false } } })
 vim.cmd("edit!")
 
 -- Range and file-level destinations are explicit; identity and text survive.

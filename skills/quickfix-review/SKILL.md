@@ -13,11 +13,45 @@ Use this skill when findings should appear in the Quickfix Review list.
 2. Inspect the diff and relevant surrounding code.
 3. Trace changed data through callers, error paths, persistence, and tests.
 4. Report only actionable issues introduced or exposed by the changeset.
-5. Write `findings.json` in the repository or another user-visible path.
-6. Ask the user to run `:QuickfixReviewImport <path>` unless live import is available.
+5. When Sidekick requests an automatic response, write one complete payload and its ready marker as described below. Otherwise, prefer `.quickfix-review/agent-response.json` when it is unused, or choose another user-visible JSON path.
+6. When the automatic response mailbox is not in use, ask the user to run `:QuickfixReviewImport` for the default path or `:QuickfixReviewImport <path>` for another path.
 
 Do not modify source code unless separately asked. Do not report style choices,
 pre-existing behavior, or unsupported speculation.
+
+## Automatic responses
+
+The Sidekick message contains a section headed `Quickfix Review notes for this
+review:` and ending at `End of Quickfix Review notes.`. That delimited section is
+the user's review notes for this request. Review the notes in that section;
+conversation outside it is not part of the Quickfix Review payload. Different
+requests may cover different files or chunks; the response file is only the
+return channel, not a task database.
+
+When instructed to use the automatic response mailbox:
+
+1. Produce exactly one complete version 1 findings payload for the current
+   batch; do not split one answer across multiple payloads.
+2. Use `.quickfix-review/agent-response.json` when it does not exist. If it
+   exists, do not modify it: choose an unused filename by adding a unique prefix
+   before `agent-response.json`.
+3. Write the complete payload first. After that write finishes, create an empty
+   file at `<payload-path>.ready`. Do not create the marker before the payload is
+   complete.
+4. Treat both files as ephemeral, disposable mailbox messages—not persistent
+   agent state. Never append to an earlier response or carry its findings into
+   the new payload. Each response stands alone; imported findings are merged by
+   Quickfix Review.
+5. Quickfix Review consumes and deletes both the payload and ready marker after
+   a successful import. Their disappearance confirms success; do not recreate
+   them or report a failure for this review request.
+6. Report a concern again only when the current review independently finds it;
+   do not recreate entries merely because response files are absent.
+7. Do not edit `.gitignore`, `.git/info/exclude`, or unrelated repository files
+   to support the mailbox.
+
+An empty `findings` array is a valid complete response. Write JSON only, with no
+surrounding prose.
 
 ## Findings
 
@@ -28,11 +62,9 @@ between 0 and 1 and order findings by severity, then location.
 ```json
 {
   "version": 1,
-  "source": "codex",
   "origin": "agent",
   "findings": [
     {
-      "id": "stable-finding-id",
       "path": "relative/path.lua",
       "line": 10,
       "line_end": 12,
@@ -49,7 +81,7 @@ between 0 and 1 and order findings by severity, then location.
 
 Required fields are top-level `version`, `origin`, and `findings`, plus
 `path` and `text` for each finding. `line` and `line_end` are optional for file
-findings. Set `origin` to `agent`, use repository-relative paths, positive
-1-based lines, and stable IDs. An empty findings array is valid.
+findings. Set `origin` to `agent`, use repository-relative paths and positive
+1-based lines. Omit IDs; Neovim assigns internal note identity. An empty findings array is valid.
 Do not include absolute paths outside the repository, prose outside the JSON, or
 executable content.

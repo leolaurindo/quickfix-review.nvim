@@ -15,7 +15,7 @@ vim.opt.rtp:prepend(root)
 
 local notes = require("quickfix_review")
 local persist = require("quickfix_persist")
-notes.setup({ persist_review_list = false })
+notes.setup({ persist_review_list = false, agent = { response = { watch = false } } })
 
 local file = vim.fs.joinpath(root, "README.md")
 vim.fn.setqflist({}, "r", { title = "persisted", items = { { filename = file, lnum = 1, text = "saved" } } })

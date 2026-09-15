@@ -15,7 +15,15 @@ M.defaults = {
 	quickfix = {
 		prefill = true,
 		inline = true,
+		agent_label = { enabled = true, text = " AGENT " },
 		float = { enabled = true, delay = 500, permanent = false, command = true },
+	},
+	agent = {
+		protect_git = true,
+		response = {
+			watch = true,
+			path = ".quickfix-review/agent-response.json",
+		},
 	},
 	keys = {},
 }

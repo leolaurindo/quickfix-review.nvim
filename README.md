@@ -66,8 +66,9 @@ wrappers. A note is stored on its native producer item in
 Quickfix Review can receive findings from coding agents through the repository's
 [`skills/quickfix-review/SKILL.md`](skills/quickfix-review/SKILL.md) workflow:
 
-1. The agent reviews the changeset and writes versioned `findings.json`.
-2. Import the findings with `:QuickfixReviewImport findings.json`.
+1. The agent reviews the changeset and writes versioned findings JSON.
+2. Import the findings with `:QuickfixReviewImport [file]`. Without a file,
+   the command reads `.quickfix-review/agent-response.json` from the repository root.
 3. Review and edit the imported notes in the owned Quickfix Review list.
 4. Export the selected notes to the clipboard or a file, or send them to
    Sidekick when `sidekick.nvim` is installed. Use
@@ -75,6 +76,19 @@ Quickfix Review can receive findings from coding agents through the repository's
 
 The skill is also usable without live integration: the agent writes the file and
 asks you to run the import command. See [Import](#import) for the JSON format.
+
+Plugin managers install the skill with the plugin but do not register it with
+coding-agent clients. Install it using the mechanism supported by your client.
+For clients that discover `~/.agents/skills`, symlink the shipped directory:
+
+```sh
+mkdir -p ~/.agents/skills
+ln -s /path/to/quickfix-review.nvim/skills/quickfix-review ~/.agents/skills/quickfix-review
+```
+
+A repository-local `.agents/skills/quickfix-review/SKILL.md` may be used instead
+when the client supports project skills. A symlink keeps the skill updated with
+the plugin; copying it requires manual updates.
 
 Sidekick is an optional destination supplied by `quickfix-export.nvim`:
 
@@ -86,6 +100,31 @@ require("quickfix_review").setup({
 
 Without this configuration, exports use the default clipboard destination.
 See [Export](#export) for custom formats and destinations.
+
+The repository-scoped response mailbox is watched by default. To opt out:
+
+```lua
+require("quickfix_review").setup({
+  agent = { response = { watch = false } },
+})
+```
+
+Run `:QuickfixReviewSendAgent` to insert the selected user-authored review notes
+into Sidekick, or `:QuickfixReviewSendAgent!` to submit immediately for that
+invocation. Use `:QuickfixReviewSendAgentAndClear[!]` to clear all selected
+notes only after the send succeeds. The message places them between `Quickfix
+Review notes for this review:` and `End of Quickfix Review notes.` and tells the
+agent to write one complete findings payload to
+`.quickfix-review/agent-response.json`, or an unused prefixed variant when that
+path exists, then create a matching `.ready` file. Review imports and deletes
+both files after success. Their disappearance confirms successful consumption;
+it is not a failure and agents must not recreate them.
+
+Each send is an independent review batch. Agents must not accumulate old
+responses or recreate a consumed response merely because its files disappeared.
+The plugin makes a best-effort attempt to add the mailbox to repository-local
+`.git/info/exclude`. If that fails, watching continues with a warning so the user
+can ignore the path manually.
 
 ## Quick start
 
@@ -111,24 +150,48 @@ See [Export](#export) for custom formats and destinations.
 | `:QuickfixReviewPick` | Pick an owned note |
 | `:QuickfixReviewPickCurrent` | Pick a note in the current list |
 | `:QuickfixReviewSearch` | Search the current list by path, entry text, or note text |
-| `:QuickfixReviewExport` | Export the selected list |
+| `:QuickfixReviewExport[!]` | Export without agent notes; `!` includes them |
+| `:QuickfixReviewSendAgent[!]` | Send user notes to Sidekick; `!` submits immediately |
+| `:QuickfixReviewSendAgentAndClear[!]` | Send user notes, then clear all notes on success |
+| `:QuickfixReviewReloadAgentResponse` | Retry retained agent responses |
 | `:QuickfixReviewExportUser` | Export user-authored notes only |
 | `:QuickfixReviewExportAgent` | Export agent-authored notes only |
 | `:QuickfixReviewExportList` | Export the current native list |
-| `:QuickfixReviewExportAndClear` | Export, then clear on success |
+| `:QuickfixReviewExportAndClear[!]` | Export and clear matching notes; `!` includes agent notes |
 | `:QuickfixReviewClear` | Clear annotations or owned entries |
+| `:QuickfixReviewClearAgent` | Clear agent-authored notes in the current review scope |
 | `:QuickfixReviewSaveList <name>` | Save the selected native list |
 | `:QuickfixReviewLoadList <name>` | Load a named native list |
-| `:QuickfixReviewImport <file>` | Import findings from JSON |
+| `:QuickfixReviewImport [file]` | Import findings from JSON; defaults to the repository mailbox path |
 | `:QuickfixReviewHide` / `:QuickfixReviewShow` | Toggle source marks |
 | `:QuickfixReviewHover` | Show the qf row's note |
 | `:QuickfixReviewQuit` | Save and close the note editor (buffer-local) |
 | `:QuickfixReviewNext` / `:QuickfixReviewPrev` | Pick the next/previous note |
-| `:QuickfixReviewSend` | Export through the configured destination |
+| `:QuickfixReviewSend[!]` | Send without agent notes; `!` includes them |
 
 `QuickfixReviewAdd` accepts a range. `QuickfixReviewReanchor` accepts a range
 and `!` for file scope. Notes can be added from a source buffer, a quickfix row,
 a location-list row, or a diff row.
+
+### Export, send, and clear semantics
+
+From a quickfix/location-list window these commands target the current list;
+elsewhere they target the owned Quickfix Review list for the active scope.
+
+- General export and send commands retain ordinary unannotated producer rows but
+  omit agent-authored notes by default. Their `!` variants include agent notes.
+- `ExportUser` and `ExportAgent` include only annotated notes of that origin.
+- `SendAgent[!]` always sends only user-authored notes to Sidekick; `!` means
+  submit immediately rather than include agents.
+- `ExportAndClear` clears user notes only after a successful export, preserving
+  agent notes. Its `!` variant exports and clears both origins.
+- `SendAgentAndClear[!]` sends only user notes, then clears all notes in the
+  selected target after success. Its `!` also means submit immediately.
+- Failed exports/sends never clear notes. Clearing annotations never deletes
+  native producer rows.
+- Clearing a producer list removes annotations and their owned mirrors. Clearing
+  the owned list removes owned entries but does not rewrite another native
+  producer list that still carries an annotation.
 
 ### Quickfix mappings
 
@@ -177,7 +240,11 @@ Defaults:
 | `float` | `{ enabled = true, delay = 500, permanent = false }` | Source note hover |
 | `quickfix.prefill` | `true` | Start new qf notes with producer text |
 | `quickfix.inline` | `true` | Show marks in qf buffers |
+| `quickfix.agent_label` | `{ enabled = true, text = " AGENT " }` | Colored provenance badge for agent notes |
 | `quickfix.float` | `{ enabled = true, delay = 500, permanent = false, command = true }` | qf note hover |
+| `agent.protect_git` | `true` | Best-effort repository-local Git exclusion |
+| `agent.response.watch` | `true` | Watch and automatically import responses; set to `false` to opt out |
+| `agent.response.path` | `".quickfix-review/agent-response.json"` | Consumed agent response mailbox |
 | `keys` | `{}` | Optional global note, export, list, and navigation mappings |
 
 Global mappings are disabled by default. Configure only the mappings you want;
@@ -241,25 +308,29 @@ require("quickfix_review").export({ warn_stale = false })
 
 Import versioned agent findings into the owned notes quickfix list:
 
-```lua
-require("quickfix_review").import_findings("findings.json", { source = "agent" })
+```vim
+:QuickfixReviewImport
+:QuickfixReviewImport path/to/findings.json
 ```
+
+The argument is optional and defaults to the configured repository response path,
+`.quickfix-review/agent-response.json`. The equivalent Lua API accepts the same
+optional source.
 
 Each finding requires `text` and a repository-relative `path`; `line` and
 `line_end` are optional. Stable string IDs update existing findings; findings
 without IDs match by location. `severity`, `confidence`, `category`, `evidence`,
 and `suggestion` are retained in `note.metadata`. Imported agent findings use
 `metadata.origin = "agent"`; existing notes without an origin are treated as
-user-authored.
+user-authored. Agent notes display a highlighted `AGENT` badge in producer and
+owned quickfix/location-list rows without changing native item text.
 
 ```json
 {
   "version": 1,
-  "source": "agent",
   "origin": "agent",
   "findings": [
     {
-      "id": "agent-001",
       "path": "lua/example.lua",
       "line": 10,
       "line_end": 12,
@@ -301,9 +372,10 @@ require("quickfix_review").export({
 
 Structured records include annotation `metadata`; IDs and timestamps are not
 exported. Markdown stays concise and JSON/custom formatters receive metadata.
-Agent-authored Markdown records include a `[source: agent]` label. Use
-`:QuickfixReviewExportUser` or `:QuickfixReviewExportAgent` to filter by note
-origin. Built-in destinations are `clipboard`, `file`, and optional `sidekick`.
+General exports omit agent-authored notes by default; pass
+`include_agent_notes = true` or use `:QuickfixReviewExport!` to include them.
+`:QuickfixReviewExportUser` and `:QuickfixReviewExportAgent` select one origin.
+Built-in destinations are `clipboard`, `file`, and optional `sidekick`.
 See [`docs/integrations.md`](docs/integrations.md) for extension contracts.
 
 ## Integrations

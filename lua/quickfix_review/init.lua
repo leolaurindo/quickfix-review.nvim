@@ -22,12 +22,14 @@ local picker = require("quickfix_review.picker")
 local exporter = require("quickfix_review.export")
 local sender = require("quickfix_review.sender")
 local importer = require("quickfix_review.import")
+local agent_file = require("quickfix_review.agent.file")
 local source_state = require("quickfix_review.source")
 
 local current_scope
 local review_watch
 local setup_done = false
 local hover_tick = 0
+local configure_agent
 
 local function notify(message, level)
 	vim.notify(message, level, { title = "Quickfix Review" })
@@ -125,6 +127,9 @@ local function refresh_scope(force)
 	current_scope = next_scope
 	restore_review()
 	marks.refresh()
+	if configure_agent then
+		configure_agent()
+	end
 	return true
 end
 
@@ -653,6 +658,42 @@ local function selected_target(opts)
 	return owned and { kind = "quickfix", id = owned.id }
 end
 
+function M.send_agent(opts)
+	opts = opts or {}
+	local response_path = config.get().agent.response.path
+	local instructions = table.concat({
+		"",
+		"Review these notes, then write one complete version 1 findings JSON payload to " .. response_path .. ".",
+		"If that file already exists, do not modify it; add a unique prefix before its filename and use that path instead.",
+		"After the payload write finishes, create an empty <payload-path>.ready file to signal completion.",
+		"Do not accumulate prior responses. Quickfix Review deletes both files after a successful import.",
+		"Their disappearance confirms successful consumption; do not recreate them for this review request.",
+	}, "\n")
+	return M.export(vim.tbl_extend("force", {}, opts, {
+		list = selected_target(opts),
+		note_origin = "user",
+		destination = "sidekick",
+		destination_opts = { submit = opts.submit == true },
+		prefix = "Quickfix Review notes for this review:\n\n",
+		suffix = "\nEnd of Quickfix Review notes." .. instructions,
+	}))
+end
+
+function M.send_agent_and_clear(opts)
+	opts = opts or {}
+	local target = selected_target(opts)
+	local ok, err = M.send_agent(vim.tbl_extend("force", {}, opts, { list = target }))
+	if not ok then
+		return false, err
+	end
+	local cleared, clear_err = M.clear_annotations({ list = target })
+	if not cleared then
+		notify("send succeeded but clear failed: " .. tostring(clear_err), vim.log.levels.WARN)
+		return false, clear_err
+	end
+	return true
+end
+
 function M.export(opts)
 	refresh_scope()
 	opts = opts or {}
@@ -695,6 +736,7 @@ function M.export_agent(opts)
 end
 
 function M.clear_annotations(opts)
+	opts = opts or {}
 	local target = selected_target(opts)
 	if not target then
 		return false, "no list selected"
@@ -706,7 +748,7 @@ function M.clear_annotations(opts)
 	local owned = type(value.context) == "table"
 		and type(value.context.quickfix_review) == "table"
 		and value.context.quickfix_review.role == "notes"
-	if owned and not (opts and opts.annotations_only) then
+	if owned and not opts.annotations_only and not opts.note_origin then
 		local ok, clear_err = lists.clear(resolved)
 		if ok then
 			marks.refresh()
@@ -715,15 +757,19 @@ function M.clear_annotations(opts)
 		return ok, clear_err
 	end
 	local items = vim.deepcopy(value.items or {})
-	local ids = {}
+	local kept, ids = {}, {}
 	for _, item in ipairs(items) do
 		local note = annotations.get(item)
-		if note then
-			ids[#ids + 1] = note.id
+		local matches = note and (not opts.note_origin or annotations.origin(note) == opts.note_origin)
+		if not matches or not owned then
+			if matches then
+				ids[#ids + 1] = note.id
+				annotations.remove(item)
+			end
+			kept[#kept + 1] = item
 		end
-		annotations.remove(item)
 	end
-	local ok, clear_err = lists.replace(resolved, items, value.idx, value.changedtick)
+	local ok, clear_err = lists.replace(resolved, kept, math.min(value.idx or 1, #kept), value.changedtick)
 	if ok then
 		for _, id in ipairs(ids) do
 			remove_owned_copy(id)
@@ -734,12 +780,26 @@ function M.clear_annotations(opts)
 	return ok, clear_err
 end
 
+function M.clear_agent_reviews(opts)
+	opts = vim.tbl_extend("force", {}, opts or {}, { note_origin = "agent" })
+	if not opts.list then
+		local owned = lists.find_owned(scope_id())
+		opts.list = owned and { kind = "quickfix", id = owned.id }
+	end
+	return M.clear_annotations(opts)
+end
+
 function M.export_and_clear(opts)
+	opts = opts or {}
 	local ok, err = M.export(opts)
 	if not ok then
 		return false, err
 	end
-	local cleared, clear_err = M.clear_annotations(opts)
+	local clear_opts = vim.tbl_extend("force", {}, opts)
+	if not clear_opts.note_origin and not clear_opts.include_agent_notes then
+		clear_opts.note_origin = "user"
+	end
+	local cleared, clear_err = M.clear_annotations(clear_opts)
 	if not cleared then
 		notify("export succeeded but clear failed: " .. tostring(clear_err), vim.log.levels.WARN)
 		return false, clear_err
@@ -796,8 +856,25 @@ function M.load_list(name, opts)
 	return restored
 end
 
+local function finish_import(result)
+	marks.refresh()
+	persist_review()
+	local message = ("imported findings (%d added, %d updated, %d unchanged, %d skipped)"):format(
+		result.added,
+		result.updated,
+		result.unchanged or 0,
+		result.skipped or #result.errors
+	)
+	notify(message, (result.skipped or #result.errors) > 0 and vim.log.levels.WARN or vim.log.levels.INFO)
+	return result
+end
+
 function M.import_findings(source, opts)
 	refresh_scope()
+	if source == nil or source == "" then
+		local response = config.get().agent.response
+		source = vim.fs.joinpath(current_scope.root, response.path)
+	end
 	opts = vim.tbl_extend("force", {}, opts or {}, {
 		root = current_scope and current_scope.root,
 		scope_id = scope_id(),
@@ -808,18 +885,44 @@ function M.import_findings(source, opts)
 		notify("import failed: " .. tostring(err), vim.log.levels.ERROR)
 		return nil, err
 	end
-	marks.refresh()
-	persist_review()
-	local imported = result.added + result.updated
-	if #result.errors > 0 then
-		notify(("imported %d findings; skipped %d"):format(imported, #result.errors), vim.log.levels.WARN)
-	else
-		notify(
-			("imported %d findings (%d added, %d updated)"):format(imported, result.added, result.updated),
-			vim.log.levels.INFO
-		)
+	return finish_import(result)
+end
+
+function M.reload_agent_response()
+	local result, err = agent_file.reload(true)
+	if not result then
+		notify("agent response reload failed: " .. tostring(err), vim.log.levels.ERROR)
 	end
-	return result
+	return result, err
+end
+
+configure_agent = function()
+	agent_file.stop()
+	local agent = config.get().agent
+	local response = agent and agent.response
+	if not current_scope or not response or not response.watch then
+		return
+	end
+	local handle, err = agent_file.setup({
+		root = current_scope.root,
+		path = response.path,
+		protect_git = agent.protect_git,
+		import = function(payload, id_namespace)
+			if type(payload) ~= "table" or payload.origin ~= "agent" then
+				return nil, "automatic response origin must be agent"
+			end
+			return M.import_findings(payload, { origin = "agent", id_namespace = id_namespace })
+		end,
+		done = function() end,
+		failed = function(file_err)
+			notify("agent response import failed: " .. tostring(file_err), vim.log.levels.ERROR)
+		end,
+	})
+	if not handle then
+		notify("agent response watcher failed: " .. tostring(err), vim.log.levels.ERROR)
+	elseif handle.warning then
+		notify(handle.warning, vim.log.levels.WARN)
+	end
 end
 
 function M.next()
@@ -828,8 +931,12 @@ end
 function M.prev()
 	return M.next()
 end
-function M.send()
-	return M.export({ list = selected_target(), destination = config.get().send })
+function M.send(opts)
+	opts = vim.tbl_extend("force", {}, opts or {}, {
+		list = selected_target(opts),
+		destination = config.get().send,
+	})
+	return M.export(opts)
 end
 function M.export_qf()
 	local current = lists.current()
@@ -867,12 +974,26 @@ local function install_commands()
 	command("QuickfixReviewSearch", function()
 		M.search()
 	end, { desc = "Search the current list and review notes" })
-	command("QuickfixReviewExport", M.export, { desc = "Export the selected list" })
+	command("QuickfixReviewExport", function(o)
+		M.export({ include_agent_notes = o.bang })
+	end, { bang = true, desc = "Export the selected list (! includes agent notes)" })
+	command("QuickfixReviewSendAgent", function(o)
+		M.send_agent({ submit = o.bang })
+	end, { bang = true, desc = "Send review notes to Sidekick (! submits)" })
+	command("QuickfixReviewSendAgentAndClear", function(o)
+		M.send_agent_and_clear({ submit = o.bang })
+	end, { bang = true, desc = "Send review notes to Sidekick and clear them (! submits)" })
+	command("QuickfixReviewReloadAgentResponse", M.reload_agent_response, {
+		desc = "Retry retained agent response files",
+	})
 	command("QuickfixReviewExportUser", M.export_user, { desc = "Export user-authored notes" })
 	command("QuickfixReviewExportAgent", M.export_agent, { desc = "Export agent-authored notes" })
 	command("QuickfixReviewExportList", M.export_qf, { desc = "Export the current native list" })
-	command("QuickfixReviewExportAndClear", M.export_and_clear, { desc = "Export then clear safely" })
+	command("QuickfixReviewExportAndClear", function(o)
+		M.export_and_clear({ include_agent_notes = o.bang })
+	end, { bang = true, desc = "Export then clear safely (! includes agent notes)" })
 	command("QuickfixReviewClear", M.clear_annotations, { desc = "Clear annotations or owned entries" })
+	command("QuickfixReviewClearAgent", M.clear_agent_reviews, { desc = "Clear agent-authored review notes" })
 	command("QuickfixReviewSaveList", function(o)
 		M.save_list(o.args)
 	end, { nargs = 1, desc = "Save the selected native list" })
@@ -881,7 +1002,7 @@ local function install_commands()
 	end, { nargs = 1, desc = "Load a named native list" })
 	command("QuickfixReviewImport", function(o)
 		M.import_findings(o.args, { origin = "agent" })
-	end, { nargs = 1, complete = "file", desc = "Import agent review findings from JSON" })
+	end, { nargs = "?", complete = "file", desc = "Import agent review findings from JSON" })
 	command("QuickfixReviewHide", marks.hide, { desc = "Hide Quickfix Review marks" })
 	command("QuickfixReviewShow", marks.show, { desc = "Show Quickfix Review marks" })
 	command("QuickfixReviewHover", function()
@@ -889,7 +1010,9 @@ local function install_commands()
 	end, { desc = "Show the note at the current quickfix row" })
 	command("QuickfixReviewNext", M.next, { desc = "Pick the next Quickfix Review annotation" })
 	command("QuickfixReviewPrev", M.prev, { desc = "Pick the previous Quickfix Review annotation" })
-	command("QuickfixReviewSend", M.send, { desc = "Export through the configured destination" })
+	command("QuickfixReviewSend", function(o)
+		M.send({ include_agent_notes = o.bang })
+	end, { bang = true, desc = "Export through the configured destination (! includes agent notes)" })
 end
 
 local function actions_qf_mapping(lhs)
@@ -917,7 +1040,10 @@ function M.setup(opts)
 	resolver.register(require("quickfix_review.resolvers.generic"))
 	sender.set_default(config.get().send)
 	marks.setup(config.get())
-	refresh_scope(true)
+	local scope_changed = refresh_scope(true)
+	if not scope_changed then
+		configure_agent()
+	end
 	marks.refresh()
 	if setup_done then
 		return M
@@ -998,6 +1124,10 @@ function M.setup(opts)
 				setup_qf_buffer(e.buf)
 			end
 		end,
+	})
+	vim.api.nvim_create_autocmd("VimLeavePre", {
+		group = group,
+		callback = agent_file.stop,
 	})
 	install_commands()
 	local keys = config.get().keys

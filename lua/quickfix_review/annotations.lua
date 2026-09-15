@@ -95,10 +95,7 @@ function M.origin(note)
 	if metadata.origin == "agent" then
 		return "agent"
 	end
-	if metadata.origin == "user" or metadata.source == nil or metadata.source == "user" then
-		return "user"
-	end
-	return "agent"
+	return "user"
 end
 
 function M.valid(note)

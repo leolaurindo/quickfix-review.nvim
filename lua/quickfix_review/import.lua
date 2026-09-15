@@ -37,6 +37,16 @@ local function inside_root(root, path)
 	return path:sub(1, #prefix) == prefix
 end
 
+local function resolves_inside(root, path)
+	local real_root = vim.uv.fs_realpath(root) or root
+	local probe, real = path
+	repeat
+		real = vim.uv.fs_realpath(probe)
+		probe = vim.fs.dirname(probe)
+	until real or probe == vim.fs.dirname(probe)
+	return not real or inside_root(real_root, real)
+end
+
 local function finding_location(finding, root)
 	local input = type(finding.location) == "table" and finding.location or finding
 	local path = input.path or input.file or finding.path
@@ -67,7 +77,13 @@ local function finding_location(finding, root)
 		resolver = input.resolver or finding.resolver,
 	})
 	local absolute = value and location.absolute(value)
-	if not value or not value.path or not absolute or not inside_root(root, absolute) then
+	if
+		not value
+		or not value.path
+		or not absolute
+		or not inside_root(root, absolute)
+		or not resolves_inside(root, absolute)
+	then
 		return nil, "path is outside the current repository"
 	end
 	return value
@@ -80,16 +96,19 @@ local function finding_text(finding)
 	return finding.text
 end
 
-local function finding_id(finding, value, text)
+local function finding_id(finding, value, text, opts, index)
+	if opts.id_namespace then
+		return opts.id_namespace .. ":" .. index, true
+	end
 	if finding.id ~= nil then
 		if type(finding.id) ~= "string" or finding.id == "" then
 			return nil, "id must be a non-empty string"
 		end
-		return finding.id
+		return finding.id, true
 	end
 	local encoded = vim.json.encode({ path = value.path, line = value.line, line_end = value.line_end, text = text })
 	local ok, digest = pcall(vim.fn.sha256, encoded)
-	return "import:" .. (ok and digest or encoded:gsub("[^%w]+", "-"))
+	return "import:" .. (ok and digest or encoded:gsub("[^%w]+", "-")), false
 end
 
 local function metadata(finding, opts, payload)
@@ -99,13 +118,12 @@ local function metadata(finding, opts, payload)
 			value[key] = vim.deepcopy(finding[key])
 		end
 	end
-	value.source = value.source or finding.source or opts.source or payload.source
-	value.origin = value.origin or finding.origin or opts.origin or payload.origin
+	value.origin = opts.origin or value.origin or finding.origin or payload.origin
 	return next(value) and value or nil
 end
 
 local function prepare(payload, opts)
-	if type(payload) ~= "table" or payload.version ~= 1 or type(payload.findings) ~= "table" then
+	if type(payload) ~= "table" or payload.version ~= 1 or not vim.islist(payload.findings) then
 		return nil, "findings payload must contain version 1 and a findings array"
 	end
 	local encoded, encode_err = pcall(vim.json.encode, payload)
@@ -124,13 +142,13 @@ local function prepare(payload, opts)
 			elseif not text then
 				errors[#errors + 1] = ("finding %d: %s"):format(index, text_err)
 			else
-				local id, id_err = finding_id(finding, value, text)
+				local id, has_id = finding_id(finding, value, text, opts, index)
 				if not id then
-					errors[#errors + 1] = ("finding %d: %s"):format(index, id_err)
+					errors[#errors + 1] = ("finding %d: %s"):format(index, has_id)
 				else
 					prepared[#prepared + 1] = {
 						id = id,
-						has_id = finding.id ~= nil,
+						has_id = has_id,
 						location = value,
 						text = text,
 						metadata = metadata(finding, opts, payload),
@@ -177,7 +195,7 @@ function M.run(source, opts)
 	if not prepared then
 		return nil, prepare_result
 	end
-	local result = { added = 0, updated = 0, errors = prepare_result }
+	local result = { added = 0, updated = 0, unchanged = 0, skipped = #prepare_result, errors = prepare_result }
 	if #prepared == 0 then
 		return result
 	end
@@ -187,23 +205,38 @@ function M.run(source, opts)
 	for index, item in ipairs(items) do
 		local note = annotations.get(item)
 		if note then
-			by_id[note.id] = index
-			by_location[location.key(note.location)] = index
+			local origin = annotations.origin(note) .. "\0"
+			by_id[origin .. note.id] = index
+			by_location[origin .. location.key(note.location)] = index
 		end
 	end
 	for _, finding in ipairs(prepared) do
-		local index = by_id[finding.id]
+		local origin = annotations.origin(finding) .. "\0"
+		local index = by_id[origin .. finding.id]
 		if not index and not finding.has_id then
-			index = by_location[location.key(finding.location)]
+			index = by_location[origin .. location.key(finding.location)]
 		end
 		if index then
-			local note, update_err = update_item(items[index], finding)
-			if not note then
-				result.errors[#result.errors + 1] = "could not update " .. finding.id .. ": " .. update_err
+			local item = items[index]
+			local old = annotations.get(item)
+			local unchanged = old
+				and old.text == finding.text
+				and location.equal(old.location, finding.location)
+				and vim.deep_equal(old.metadata, finding.metadata)
+				and (tonumber(item.col) or 0) == finding.col
+				and (tonumber(item.end_col) or 0) == finding.end_col
+			if unchanged then
+				result.unchanged = result.unchanged + 1
 			else
-				result.updated = result.updated + 1
-				by_id[note.id] = index
-				by_location[location.key(note.location)] = index
+				local note, update_err = update_item(item, finding)
+				if not note then
+					result.errors[#result.errors + 1] = "could not update " .. finding.id .. ": " .. update_err
+					result.skipped = result.skipped + 1
+				else
+					result.updated = result.updated + 1
+					by_id[origin .. note.id] = index
+					by_location[origin .. location.key(note.location)] = index
+				end
 			end
 		else
 			local item = {
@@ -220,10 +253,11 @@ function M.run(source, opts)
 			local note, set_err = annotations.set(item, finding.location, finding.text, { id = finding.id }, finding.metadata)
 			if not note then
 				result.errors[#result.errors + 1] = "could not add " .. finding.id .. ": " .. set_err
+				result.skipped = result.skipped + 1
 			else
 				items[#items + 1] = item
-				by_id[note.id] = #items
-				by_location[location.key(note.location)] = #items
+				by_id[origin .. note.id] = #items
+				by_location[origin .. location.key(note.location)] = #items
 				result.added = result.added + 1
 			end
 		end

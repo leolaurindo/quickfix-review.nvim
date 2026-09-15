@@ -20,7 +20,7 @@ local annotations = require("quickfix_review.annotations")
 local sender = require("quickfix_review.sender")
 local resolver = require("quickfix_review.resolver")
 
-notes.setup({ persist_review_list = false })
+notes.setup({ persist_review_list = false, agent = { response = { watch = false } } })
 assert(vim.fn.exists(":QuickfixReviewAdd") == 2)
 assert(vim.fn.exists(":QuickfixReviewImport") == 2)
 assert(vim.fn.exists(":QuickfixReviewExport") == 2)
@@ -196,9 +196,11 @@ local invalid_buf = vim.api.nvim_create_buf(false, true)
 vim.api.nvim_buf_set_name(invalid_buf, "editor:///does/not/exist.lua")
 assert(not resolver.location(invalid_buf))
 
+local invalid_payload, invalid_payload_err = notes.import_findings({ version = 1, findings = { invalid = true } })
+assert(not invalid_payload and invalid_payload_err:find("findings array", 1, true))
+
 local agent_payload = {
 	version = 1,
-	source = "test-agent",
 	origin = "agent",
 	findings = {
 		{
@@ -224,7 +226,6 @@ for _, item in ipairs(imported_owned.items) do
 	local note = annotations.get(item)
 	if note and note.id == "agent-001" then
 		imported_note = note
-		assert(note.metadata.source == "test-agent")
 		assert(note.metadata.origin == "agent")
 		assert(note.metadata.severity == "high")
 		assert(item.filename == file and item.lnum == 12)
@@ -233,6 +234,7 @@ end
 assert(imported_note)
 local imported_records = assert(require("quickfix_review.export").records({
 	list = { kind = "quickfix", id = imported_owned.id },
+	include_agent_notes = true,
 }))
 local exported_metadata
 for _, record in ipairs(imported_records) do
@@ -247,7 +249,7 @@ local agent_records = assert(require("quickfix_review.export").records({
 	note_origin = "agent",
 }))
 assert(#agent_records == 2)
-assert(agent_records[1].labels[#agent_records[1].labels] == "source: agent")
+assert(agent_records[1].labels[#agent_records[1].labels] == "agent")
 local user_records = assert(require("quickfix_review.export").records({
 	list = { kind = "quickfix", id = imported_owned.id },
 	note_origin = "user",
@@ -258,6 +260,7 @@ end
 
 local updated = assert(notes.import_findings({
 	version = 1,
+	origin = "agent",
 	findings = {
 		{ id = "agent-001", path = "README.md", line = 13, text = "The updated review concern." },
 	},
@@ -268,7 +271,7 @@ for _, item in ipairs(updated_owned.items) do
 	local note = annotations.get(item)
 	if note and note.id == "agent-001" then
 		assert(note.text == "The updated review concern.")
-		assert(note.metadata.source == "test-agent")
+		assert(note.metadata.origin == "agent")
 		assert(item.lnum == 13)
 	end
 end
