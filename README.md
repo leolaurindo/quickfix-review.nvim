@@ -1,10 +1,15 @@
 # quickfix-review.nvim
 
 Add review notes to almost any location, such as source code,
-quickfix/location-list entries, Git diff rows and more. Notes remain attached to
-their original producer items, while a
-dedicated `Quickfix Review` quickfix list provides a central view for reviewing,
-persisting, and exporting them.
+quickfix/location-list entries, Git diff rows and more. Notes stay visible in source 
+buffers and native lists—while remaining attached to their original producer items. 
+A dedicated `Quickfix Review` quickfix list also provides a central view for 
+reviewing, persisting, and exporting them.
+
+Quickfix Review supports a bi-directional coding-agent workflow: send your
+location-aware notes to an agent, then receive its findings back as notes at the
+relevant files and ranges. Human and agent feedback share the same visible review
+surface instead of being confined to a chat transcript or separate report.
 
 Quickfix Review works standalone or as part of the [quickfix-kit.nvim](https://github.com/leolaurindo/quickfix-kit.nvim) package.
 
@@ -67,19 +72,30 @@ override either mode. A note is stored on its native producer item in
 
 ## Agent workflow
 
-Quickfix Review can receive findings from coding agents through the repository's
-[`skills/quickfix-review/SKILL.md`](skills/quickfix-review/SKILL.md) workflow:
+Quickfix Review makes agent communication bi-directional. You can send selected,
+location-aware notes to a coding agent, and the agent can return structured
+findings through the repository's
+[`skills/quickfix-review/SKILL.md`](skills/quickfix-review/SKILL.md) workflow.
+Returned findings become regular Quickfix Review notes: they are visible at their
+source locations, identifiable as agent-authored in native lists, and collected
+in the owned Quickfix Review list alongside your notes.
 
-1. The agent reviews the changeset and writes versioned findings JSON.
-2. Import the findings with `:QuickfixReviewImport [file]`. Without a file,
-   the command reads `.quickfix-review/agent-response.json` from the repository root.
-3. Review and edit the imported notes in the owned Quickfix Review list.
-4. Export the selected notes to the clipboard or a file, or send them to
-   Sidekick when `sidekick.nvim` is installed. Use
-   `:QuickfixReviewExportAgent` to send only agent-authored notes.
+A full review round trip works as follows:
 
-The skill is also usable without live integration: the agent writes the file and
-asks you to run the import command. See [Import](#import) for the JSON format.
+1. Add notes from source buffers, quickfix/location-list entries, or diff rows.
+2. Send selected user-authored notes to Sidekick with
+   `:QuickfixReviewSendAgent`, optionally submitting the prompt immediately with
+   `!`.
+3. The agent reviews the changeset and writes versioned findings JSON to the
+   repository response mailbox.
+4. Quickfix Review watches that mailbox and imports completed responses
+   automatically. You can also import a response explicitly with
+   `:QuickfixReviewImport [file]`.
+5. Review or edit the returned notes where they apply or in the central list,
+   then continue the conversation, export them, or clear them independently.
+
+The receive side also works without live integration: an agent can write the file
+and ask you to run the import command. See [Import](#import) for the JSON format.
 
 Plugin managers install the skill with the plugin but do not register it with
 coding-agent clients. Install it using the mechanism supported by your client.
