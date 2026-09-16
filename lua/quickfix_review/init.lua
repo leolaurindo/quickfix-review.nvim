@@ -669,7 +669,9 @@ function M.send_agent(opts)
 	local response_path = config.get().agent.response.path
 	local instructions = table.concat({
 		"",
-		"Review these notes, then write one complete version 1 findings JSON payload to " .. response_path .. ".",
+		"Review these notes, then create the response directory and write one complete version 1 findings JSON payload to "
+			.. response_path
+			.. ".",
 		"If that file already exists, do not modify it; add a unique prefix before its filename and use that path instead.",
 		"After the payload write finishes, create an empty <payload-path>.ready file to signal completion.",
 		"Do not accumulate prior responses. Quickfix Review deletes both files after a successful import.",
@@ -923,11 +925,12 @@ configure_agent = function()
 		failed = function(file_err)
 			notify("agent response import failed: " .. tostring(file_err), vim.log.levels.ERROR)
 		end,
+		warn = function(file_warning)
+			notify(file_warning, vim.log.levels.WARN)
+		end,
 	})
 	if not handle then
 		notify("agent response watcher failed: " .. tostring(err), vim.log.levels.ERROR)
-	elseif handle.warning then
-		notify(handle.warning, vim.log.levels.WARN)
 	end
 end
 

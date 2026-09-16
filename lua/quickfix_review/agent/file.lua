@@ -3,6 +3,10 @@ local M = {}
 local watcher
 local state
 
+local function is_directory(path)
+	return vim.fn.isdirectory(path) == 1
+end
+
 local function inside(root, path)
 	return path == root or path:sub(1, #root + 1) == root .. "/"
 end
@@ -93,6 +97,9 @@ end
 
 local function payloads(ready_only)
 	local paths = {}
+	if not is_directory(state.dir) then
+		return paths
+	end
 	for name, kind in vim.fs.dir(state.dir) do
 		if kind == "file" then
 			local payload = ready_only and name:match("^(.*)%.ready$") or name
@@ -164,30 +171,32 @@ function M.reload()
 	return drain(false, false)
 end
 
-function M.setup(opts)
-	M.stop()
-	local protect_ok, absolute, warning = pcall(M.protect, opts.root, opts.path, opts.protect_git)
-	if not protect_ok then
-		local protect_err = absolute
-		absolute, warning = resolve(opts.root, opts.path)
-		if absolute then
-			warning = "could not protect agent response path; path may be visible to Git: " .. tostring(protect_err)
-		end
-	end
-	if not absolute then
-		return nil, warning
-	end
-	local dir = vim.fs.dirname(absolute)
-	vim.fn.mkdir(dir, "p")
-	state = {
-		dir = dir,
-		basename = vim.fs.basename(absolute),
-		import = assert(opts.import),
-		done = opts.done or function() end,
-		failed = opts.failed or function() end,
-	}
+local function start_watcher(dir, callback)
 	watcher = assert(vim.uv.new_fs_event())
-	local ok, err = watcher:start(dir, {}, vim.schedule_wrap(function(event_err, filename)
+	local ok, err = watcher:start(dir, {}, vim.schedule_wrap(callback))
+	if not ok then
+		close(watcher)
+		watcher = nil
+		return nil, "could not watch findings directory: " .. tostring(err)
+	end
+	return true
+end
+
+local function activate()
+	if not state or not is_directory(state.dir) then
+		return false
+	end
+	local protect_ok, protected, warning = pcall(M.protect, state.root, state.path, state.protect_git)
+	if not protect_ok then
+		warning = "could not protect agent response path; path may be visible to Git: " .. tostring(protected)
+	end
+	if warning then
+		state.warn(warning)
+	end
+	close(watcher)
+	watcher = nil
+	state.watch_dir = state.dir
+	local ok, err = start_watcher(state.dir, function(event_err, filename)
 		if not state then
 			return
 		elseif event_err then
@@ -195,13 +204,78 @@ function M.setup(opts)
 		elseif not filename or filename:sub(-6) == ".ready" then
 			drain(true, true)
 		end
-	end))
+	end)
 	if not ok then
-		M.stop()
-		return nil, "could not watch findings directory: " .. tostring(err)
+		state.watch_dir = nil
+		return nil, err
 	end
 	drain(true, true)
-	return { path = absolute, warning = warning }
+	return true
+end
+
+local await_directory
+
+await_directory = function()
+	if is_directory(state.dir) then
+		return activate()
+	end
+	local parent = vim.fs.dirname(state.dir)
+	while inside(state.root, parent) and not is_directory(parent) do
+		local next_parent = vim.fs.dirname(parent)
+		if next_parent == parent then
+			break
+		end
+		parent = next_parent
+	end
+	if state.watch_dir == parent then
+		return true
+	end
+	close(watcher)
+	watcher = nil
+	state.watch_dir = parent
+	local ok, err = start_watcher(parent, function(event_err)
+		if not state then
+			return
+		elseif event_err then
+			state.failed(event_err)
+		else
+			local waiting, wait_err = await_directory()
+			if not waiting and wait_err then
+				state.failed(wait_err)
+			end
+		end
+	end)
+	if not ok then
+		state.watch_dir = nil
+		return nil, err
+	end
+	return true
+end
+
+function M.setup(opts)
+	M.stop()
+	local absolute, resolve_err = resolve(opts.root, opts.path)
+	if not absolute then
+		return nil, resolve_err
+	end
+	local dir = vim.fs.dirname(absolute)
+	state = {
+		root = vim.fs.normalize(opts.root),
+		path = opts.path,
+		dir = dir,
+		basename = vim.fs.basename(absolute),
+		protect_git = opts.protect_git,
+		import = assert(opts.import),
+		done = opts.done or function() end,
+		failed = opts.failed or function() end,
+		warn = opts.warn or function() end,
+	}
+	local ok, err = await_directory()
+	if not ok then
+		M.stop()
+		return nil, err
+	end
+	return { path = absolute }
 end
 
 return M

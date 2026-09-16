@@ -15,6 +15,7 @@ add_dependency("QUICKFIX_EXPORT_PATH", "quickfix-export.nvim")
 vim.opt.rtp:prepend(plugin_root)
 
 local root = vim.fn.tempname()
+local response_dir = vim.fs.joinpath(root, ".quickfix-review")
 vim.fn.mkdir(root, "p")
 assert(vim.system({ "git", "init", "-q", root }):wait().code == 0)
 local source_lines = {}
@@ -32,6 +33,11 @@ local sender = require("quickfix_review.sender")
 
 assert(require("quickfix_review.config").defaults.agent.response.watch == true)
 notes.setup({ persist_review_list = false, scope_policy = "repository" })
+assert(vim.fn.isdirectory(response_dir) == 0)
+local initially_ignored = vim.system({
+	"git", "-C", root, "check-ignore", "-q", "--no-index", ".quickfix-review/agent-response.json",
+}):wait()
+assert(initially_ignored.code ~= 0)
 assert(vim.fn.exists(":QuickfixReviewSendAgent") == 2)
 assert(vim.fn.exists(":QuickfixReviewSendAgentAndClear") == 2)
 assert(vim.fn.exists(":QuickfixReviewClearAgent") == 2)
@@ -78,6 +84,7 @@ assert(sent:find("Inspect this cleanup", 1, true))
 assert(not sent:find("unreviewed producer row", 1, true))
 assert(sent:find("End of Quickfix Review notes.", 1, true))
 assert(sent:find("Review these notes", 1, true))
+assert(sent:find("create the response directory", 1, true))
 assert(sent:find(".quickfix-review/agent-response.json", 1, true))
 assert(sent:find("If that file already exists", 1, true))
 assert(sent:find("<payload%-path>%.ready"))
@@ -109,6 +116,7 @@ local response = {
 }
 local response_path = vim.fs.joinpath(root, ".quickfix-review/agent-response.json")
 local ready_path = response_path .. ".ready"
+assert(vim.fn.mkdir(response_dir, "p") == 1)
 assert(vim.fn.writefile({ "{" }, response_path) == 0)
 vim.wait(100)
 assert(lists.find_owned(require("quickfix_review.scope").id(notes.scope())) == nil)
@@ -185,7 +193,6 @@ end
 assert(found_manual_default)
 assert(vim.fn.delete(response_path) == 0)
 
-local response_dir = vim.fs.joinpath(root, ".quickfix-review")
 local first_path = vim.fs.joinpath(response_dir, "first-race-response.json")
 local second_path = vim.fs.joinpath(response_dir, "second-race-response.json")
 local imported_ids = {}
