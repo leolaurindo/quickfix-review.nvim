@@ -136,9 +136,11 @@ notes only after the send succeeds. The message places them between `Quickfix
 Review notes for this review:` and `End of Quickfix Review notes.` and tells the
 agent to write one complete findings payload to
 `.quickfix-review/agent-response.json`, or an unused prefixed variant when that
-path exists, then create a matching `.ready` file. Review imports and deletes
-both files after success. Their disappearance confirms successful consumption;
-it is not a failure and agents must not recreate them.
+path exists, then create a matching `.ready` file. The agent creates the mailbox
+directory on first use; enabling the watcher alone does not create repository
+files or modify Git metadata. Review imports and deletes both files after
+success. Their disappearance confirms successful consumption; it is not a
+failure and agents must not recreate them.
 
 Each send is an independent review batch. Agents must not accumulate old
 responses or recreate a consumed response merely because its files disappeared.

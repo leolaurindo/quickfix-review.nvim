@@ -67,9 +67,11 @@ Automatic agent findings are watched for by default. To opt out: >
   })
 <
 Sidekick receives the selected review notes directly. The agent writes one
-complete .quickfix-review/agent-response.json payload, using an unused prefixed
-variant if needed, then creates <payload-path>.ready. Review imports and deletes
-both files after success; their disappearance confirms successful consumption.
+complete .quickfix-review/agent-response.json payload, creating the mailbox
+directory first and using an unused prefixed variant if needed, then creates
+<payload-path>.ready. Enabling the watcher does not create repository files or
+modify Git metadata. Review imports and deletes both files after success; their
+disappearance confirms successful consumption.
 Agent notes use the robot glyph in source and native list rows; user notes use
 the pencil. Without Nerd Fonts they fall back to AGENT and a portable pencil.
 Range indicators and automatic source hover appear at both endpoints. Use

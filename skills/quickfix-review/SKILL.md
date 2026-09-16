@@ -36,22 +36,24 @@ When instructed to use the automatic response mailbox:
 
 1. Produce exactly one complete version 1 findings payload for the current
    batch; do not split one answer across multiple payloads.
-2. Use `.quickfix-review/agent-response.json` when it does not exist. If it
+2. Create `.quickfix-review` if needed. The receiving plugin does not create the
+   mailbox directory; the first agent writing a response owns its creation.
+3. Use `.quickfix-review/agent-response.json` when it does not exist. If it
    exists, do not modify it: choose an unused filename by adding a unique prefix
    before `agent-response.json`.
-3. Write the complete payload first. After that write finishes, create an empty
+4. Write the complete payload first. After that write finishes, create an empty
    file at `<payload-path>.ready`. Do not create the marker before the payload is
    complete.
-4. Treat both files as ephemeral, disposable mailbox messages—not persistent
+5. Treat both files as ephemeral, disposable mailbox messages—not persistent
    agent state. Never append to an earlier response or carry its findings into
    the new payload. Each response stands alone; imported findings are merged by
    Quickfix Review.
-5. Quickfix Review consumes and deletes both the payload and ready marker after
+6. Quickfix Review consumes and deletes both the payload and ready marker after
    a successful import. Their disappearance confirms success; do not recreate
    them or report a failure for this review request.
-6. Report a concern again only when the current review independently finds it;
+7. Report a concern again only when the current review independently finds it;
    do not recreate entries merely because response files are absent.
-7. Do not edit `.gitignore`, `.git/info/exclude`, or unrelated repository files
+8. Do not edit `.gitignore`, `.git/info/exclude`, or unrelated repository files
    to support the mailbox.
 
 An empty `findings` array is a valid complete response. Write JSON only, with no

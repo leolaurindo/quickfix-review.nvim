@@ -4,6 +4,12 @@ All notable changes to Quickfix Review are documented here.
 
 ## Unreleased
 
+## [0.2.1] - 2026-09-15
+
+### Fixed
+
+- Avoid creating the agent mailbox directory or modifying local Git excludes until an agent creates the mailbox for its first response.
+
 ## [0.2.0] - 2026-09-15
 
 ### Added
@@ -42,6 +48,7 @@ Initial public release.
 - Quickfix Actions and Export are required; Persist and Diffs are optional.
 - Neovim 0.10 or newer is required.
 
-[Unreleased]: https://github.com/leolaurindo/quickfix-review.nvim/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/leolaurindo/quickfix-review.nvim/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/leolaurindo/quickfix-review.nvim/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/leolaurindo/quickfix-review.nvim/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/leolaurindo/quickfix-review.nvim/releases/tag/v0.1.0
