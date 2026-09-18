@@ -1,0 +1,28 @@
+local source = debug.getinfo(1, "S").source:sub(2)
+local plugin_root = vim.fn.fnamemodify(source, ":p:h:h")
+local projects = vim.fn.fnamemodify(plugin_root, ":h")
+local root = "/tmp/quickfix-review-grep-demo"
+vim.fn.delete(root, "rf")
+vim.fn.mkdir(root, "p")
+assert(vim.system({ "git", "init", "-q", root }):wait().code == 0)
+vim.fn.writefile({ "local M = {}", "", "-- TODO: reject expired sessions", "function M.session(token) return token end", "", "return M" }, root .. "/session.lua")
+vim.fn.writefile({ "-- TODO: report parse failures", "return function(input) return input end" }, root .. "/parser.lua")
+vim.opt.rtp:prepend(vim.env.QUICKFIX_ACTIONS_PATH or (projects .. "/quickfix-actions.nvim"))
+vim.opt.rtp:prepend(vim.env.QUICKFIX_EXPORT_PATH or (projects .. "/quickfix-export.nvim"))
+vim.opt.rtp:prepend(plugin_root)
+vim.cmd.cd(vim.fn.fnameescape(root))
+local review = require("quickfix_review")
+local sender = require("quickfix_review.sender")
+review.setup({ nerd_font = false, persist_review_list = false, scope_policy = "repository", send = "clipboard" })
+sender.register({ name = "clipboard", send = function(payload)
+	vim.fn.writefile(vim.split(payload, "\n", { plain = true }), root .. "/clipboard.md")
+	return true
+end })
+vim.api.nvim_create_user_command("DemoShowClipboard", function()
+	vim.cmd("botright new")
+	local buf = vim.api.nvim_get_current_buf()
+	vim.bo[buf].buftype, vim.bo[buf].bufhidden = "nofile", "wipe"
+	vim.api.nvim_buf_set_name(buf, "Clipboard export")
+	vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.fn.readfile(root .. "/clipboard.md"))
+	vim.bo[buf].modifiable = false
+end, {})

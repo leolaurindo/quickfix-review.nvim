@@ -13,6 +13,55 @@ surface instead of being confined to a chat transcript or separate report.
 
 Quickfix Review works standalone or as part of the [quickfix-kit.nvim](https://github.com/leolaurindo/quickfix-kit.nvim) package.
 
+## Demos
+
+**Bi-directional agent integration**
+
+![Two source-buffer notes are sent to an agent and two findings return to the Quickfix Review list](assets/agent-workflow.gif)
+
+Any coding agent can return location-aware findings by writing one complete
+version 0 payload to `.quickfix-review/agent-response.json`, then creating the
+matching `.ready` marker. Quickfix Review watches that mailbox and imports the
+completed response automatically. The shipped
+[quickfix-review skill](skills/quickfix-review/SKILL.md) defines the payload
+format and mailbox lifecycle.
+
+
+**Integrations**
+
+Quickfix Review integrates with native diffs, Diffview+, CodeDiff,
+[Differ](https://github.com/leolaurindo/differ.nvim), `diffs.nvim`, and Neogit
+when they are installed. Differ is one example: its mapped changed lines retain
+location-aware notes and markers.
+
+[![Quickfix Review markers and notes render in a Differ view](assets/differ.gif)](https://github.com/leolaurindo/differ.nvim)
+
+You can also add notes to any source buffer with `:QuickfixReviewAdd`, or from
+native quickfix and location lists. Custom UIs can supply their own buffer
+integration; see the [integration guide](docs/integrations.md).
+
+
+### Other examples
+<details>
+<summary>You can write directly on any quickfix list</summary>
+
+![Notes added to native grep quickfix entries are exported as Markdown](assets/quickfix-list.gif)
+
+</details>
+
+
+
+<details>
+<summary>With quickfix-diffs </summary>
+
+See [quickfix-diffs](https://github.com/leolaurindo/quickfix-diffs.nvim)
+
+![A Quickfix Diffs hunk receives a Quickfix Review note](assets/git-diffs.gif)
+
+</details>
+
+## Installation
+
 Requires Neovim 0.10+.
 
 Dependencies:
@@ -23,8 +72,6 @@ Dependencies:
 - Optional:
     - [quickfix-persist.nvim](https://github.com/leolaurindo/quickfix-persist.nvim)
     - [quickfix-diffs.nvim](https://github.com/leolaurindo/quickfix-diffs.nvim) supplies diff metadata for note locations.
-
-## Installation
 
 With lazy.nvim:
 
