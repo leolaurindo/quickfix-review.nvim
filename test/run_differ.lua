@@ -26,6 +26,15 @@ local old_map = {
 	from_new = { [1] = 1 },
 	from_old = { [1] = 1, [2] = 3, [4] = 6 },
 }
+local unified_map = {
+	lines = {
+		[1] = { old = 1, new = 1, kind = "context" },
+		[4] = { old = 2, kind = "old" },
+		[7] = { new = 2, kind = "new" },
+	},
+	from_new = { [1] = 1, [2] = 7 },
+	from_old = { [1] = 1, [2] = 4 },
+}
 local view = { model = { root = root, path = "README.md" }, columns = {} }
 package.preload["differ.view"] = function()
 	return { for_buf = function() return view end }
@@ -54,9 +63,13 @@ vim.api.nvim_buf_set_lines(new_buf, 0, -1, false, { "one", "two", "three", "four
 local old_buf = vim.api.nvim_create_buf(true, false)
 vim.api.nvim_buf_set_name(old_buf, "differ://old/README.md")
 vim.api.nvim_buf_set_lines(old_buf, 0, -1, false, { "one", "two", "three", "four", "five", "six", "seven" })
+local unified_buf = vim.api.nvim_create_buf(true, false)
+vim.api.nvim_buf_set_name(unified_buf, "differ://README.md")
+vim.api.nvim_buf_set_lines(unified_buf, 0, -1, false, { "one", "two", "three", "four", "five", "six", "seven" })
 view.columns = {
 	{ bufnr = old_buf, side = "old", map = old_map },
 	{ bufnr = new_buf, side = "new", map = new_map },
+	{ bufnr = unified_buf, side = "unified", map = unified_map },
 }
 
 local ns = vim.api.nvim_get_namespaces().quickfix_review
@@ -71,4 +84,10 @@ vim.api.nvim_win_set_cursor(0, { 1, 0 })
 marks.render(old_buf)
 local old_marks = vim.api.nvim_buf_get_extmarks(old_buf, ns, 0, -1, {})
 assert(#old_marks == 2 and old_marks[1][2] == 2 and old_marks[2][2] == 5)
+
+vim.api.nvim_set_current_buf(unified_buf)
+vim.api.nvim_win_set_cursor(0, { 7, 0 })
+marks.render(unified_buf)
+local unified_marks = vim.api.nvim_buf_get_extmarks(unified_buf, ns, 0, -1, {})
+assert(#unified_marks == 2 and unified_marks[1][2] == 3 and unified_marks[2][2] == 6)
 print("quickfix_review Differ marks tests passed")

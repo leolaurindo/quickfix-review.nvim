@@ -45,13 +45,14 @@ local function contains(note, line)
 	return first and line >= math.min(first, last) and line <= math.max(first, last)
 end
 
-local function matches(note, current)
+local function matches(note, current, r, bufnr)
 	local value = location.canonical(note.location)
+	local ignore_side = r and type(r.ignore_side) == "function" and r.ignore_side(bufnr)
 	return value
 		and current
 		and value.root == current.root
 		and value.path == current.path
-		and (not value.side or value.side == current.side)
+		and (ignore_side or not value.side or value.side == current.side)
 		and (not value.revision or value.revision == current.revision)
 		and (not value.hash or value.hash == current.hash)
 end
@@ -124,7 +125,7 @@ local function matching_notes(bufnr, winid)
 	end
 	local notes = {}
 	for _, note in ipairs(collect()) do
-		if matches(note, current) then
+		if matches(note, current, r, bufnr) then
 			notes[#notes + 1] = note
 		end
 	end
@@ -309,7 +310,7 @@ local function refresh_hover_all(winid)
 		local first_visible, last_visible = visible_range(winid)
 		local offsets = {}
 		for _, note in ipairs(collect()) do
-			if matches(note, current) then
+			if matches(note, current, r, state.bufnr) then
 				for _, line in ipairs(display_lines(r, note, state.bufnr)) do
 					if line and line >= first_visible and line <= last_visible then
 						offsets[line] = (offsets[line] or 0) + 1
@@ -422,7 +423,7 @@ function M.render(bufnr)
 	render_rail(bufnr)
 	local count = vim.api.nvim_buf_line_count(bufnr)
 	for _, note in ipairs(collect()) do
-		if matches(note, current) then
+		if matches(note, current, r, bufnr) then
 			local text = indicator(note)
 			for _, line in ipairs(display_lines(r, note, bufnr)) do
 				if line and line >= 1 and line <= count and text and text ~= "" then
@@ -510,7 +511,7 @@ function M.hover(bufnr, opts)
 	for _, note in ipairs(collect()) do
 		local at_line = opts.force and type(r.display_lines) ~= "function" and contains(note, line)
 			or at_endpoint(r, note, line, bufnr)
-		if matches(note, current) and at_line then
+		if matches(note, current, r, bufnr) and at_line then
 			append_note(lines, note)
 		end
 	end

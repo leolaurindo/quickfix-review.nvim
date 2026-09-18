@@ -21,6 +21,12 @@ local function column_for(view, bufnr)
 	end
 end
 
+function M.ignore_side(bufnr)
+	local view = view_for(bufnr)
+	local column = column_for(view, bufnr)
+	return column and column.side == "unified" or false
+end
+
 local function map_lines(view, bufnr, lnum)
 	local column = column_for(view, bufnr)
 	local map = column and column.map
