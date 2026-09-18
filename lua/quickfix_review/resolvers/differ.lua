@@ -21,10 +21,12 @@ local function column_for(view, bufnr)
 	end
 end
 
-function M.ignore_side(bufnr)
+function M.matches(_, bufnr)
 	local view = view_for(bufnr)
 	local column = column_for(view, bufnr)
-	return column and column.side == "unified" or false
+	if column and column.side == "unified" then
+		return true
+	end
 end
 
 local function map_lines(view, bufnr, lnum)

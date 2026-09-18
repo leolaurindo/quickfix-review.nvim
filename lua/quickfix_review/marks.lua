@@ -47,12 +47,16 @@ end
 
 local function matches(note, current, r, bufnr)
 	local value = location.canonical(note.location)
-	local ignore_side = r and type(r.ignore_side) == "function" and r.ignore_side(bufnr)
-	return value
-		and current
-		and value.root == current.root
-		and value.path == current.path
-		and (ignore_side or not value.side or value.side == current.side)
+	if not value or not current or value.root ~= current.root or value.path ~= current.path then
+		return false
+	end
+	if r and type(r.matches) == "function" then
+		local ok, matched = pcall(r.matches, value, bufnr)
+		if ok and matched ~= nil then
+			return matched
+		end
+	end
+	return (not value.side or value.side == current.side)
 		and (not value.revision or value.revision == current.revision)
 		and (not value.hash or value.hash == current.hash)
 end

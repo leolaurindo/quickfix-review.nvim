@@ -50,6 +50,7 @@ local owned, target = lists.ensure_owned({ title = "Quickfix Review" }, require(
 for _, note in ipairs({
 	{ location = { root = root, path = "README.md", line = 2, line_end = 4, resolver = "normal" }, text = "new range" },
 	{ location = { root = root, path = "README.md", line = 2, line_end = 4, side = "old", resolver = "normal" }, text = "old range" },
+	{ location = { root = root, path = "README.md", line = 2, side = "old", revision = "historical", resolver = "normal" }, text = "historical old" },
 }) do
 	local item = { filename = vim.fs.joinpath(root, "README.md"), lnum = 2, valid = 1, text = note.text, user_data = {} }
 	assert(annotations.set(item, note.location, note.text))
@@ -89,5 +90,5 @@ vim.api.nvim_set_current_buf(unified_buf)
 vim.api.nvim_win_set_cursor(0, { 7, 0 })
 marks.render(unified_buf)
 local unified_marks = vim.api.nvim_buf_get_extmarks(unified_buf, ns, 0, -1, {})
-assert(#unified_marks == 2 and unified_marks[1][2] == 3 and unified_marks[2][2] == 6)
+assert(#unified_marks == 3 and unified_marks[1][2] == 3 and unified_marks[2][2] == 3 and unified_marks[3][2] == 6)
 print("quickfix_review Differ marks tests passed")
