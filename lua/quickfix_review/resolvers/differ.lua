@@ -3,21 +3,27 @@ local location = require("quickfix_review.location")
 
 local function view_for(bufnr)
 	local ok, differ = pcall(require, "differ.view")
-	if not ok then
+	if not ok or type(differ.for_buf) ~= "function" then
 		return nil
 	end
-	return differ.for_buf and differ.for_buf(bufnr) or differ.current()
+	return differ.for_buf(bufnr)
 end
 
 function M.detect(bufnr)
 	return vim.api.nvim_buf_get_name(bufnr):find("^differ://") ~= nil
 end
 
-local function map_lines(view, lnum)
-	if not view then
-		return nil
+local function column_for(view, bufnr)
+	for _, column in ipairs(view and view.columns or {}) do
+		if column.bufnr == bufnr then
+			return column
+		end
 	end
-	local map = view:map_for("unified") or view:map_for("new") or view:map_for("old")
+end
+
+local function map_lines(view, bufnr, lnum)
+	local column = column_for(view, bufnr)
+	local map = column and column.map
 	if not map or not map.lines then
 		return nil
 	end
@@ -28,15 +34,16 @@ local function map_lines(view, lnum)
 	return { old = entry.old, new = entry.new, side = entry.kind == "new" and "new" or entry.kind == "old" and "old" }
 end
 
-local function base_location(view, winid)
-	local mapped = map_lines(view, vim.api.nvim_win_get_cursor(winid)[1])
-	if not mapped then
+local function base_location(view, bufnr, winid)
+	local column = column_for(view, bufnr)
+	local mapped = map_lines(view, bufnr, vim.api.nvim_win_get_cursor(winid)[1])
+	if not column or not mapped then
 		return nil
 	end
 	local model = view.model
 	local root = location.repo_root(model.root or vim.fn.getcwd()) or model.root or vim.fn.getcwd()
 	local line, side = mapped.new, "new"
-	if not line then
+	if column.side == "old" or not line then
 		line, side = mapped.old, "old"
 	end
 	return line and { root = root, file = model.path, line = line, side = side } or nil
@@ -44,11 +51,11 @@ end
 
 function M.location(bufnr, winid)
 	local view = view_for(bufnr)
-	local loc = view and base_location(view, winid)
+	local loc = view and base_location(view, bufnr, winid)
 	if not loc then
 		return nil
 	end
-	local revision = view.model.new_rev
+	local revision = loc.side == "old" and view.model.old_rev or view.model.new_rev
 	if revision and revision:match("^%x%x%x%x%x%x%x+") then
 		loc.revision, loc.hash = revision, revision
 	end
@@ -60,22 +67,23 @@ function M.range_location(bufnr, start_line, stop_line)
 	if not view then
 		return nil
 	end
-	local first, last = map_lines(view, start_line), map_lines(view, stop_line)
+	local first, last = map_lines(view, bufnr, start_line), map_lines(view, bufnr, stop_line)
 	if not first or not last then
 		return nil
 	end
+	local column = column_for(view, bufnr)
 	local line, side = first.new, "new"
-	if not line then
+	if not column or column.side == "old" or not line then
 		line, side = first.old, "old"
 	end
-	local line_end = last.new or last.old
+	local line_end = side == "old" and last.old or last.new
 	if line and line_end and line_end < line then
 		line, line_end = line_end, line
 	end
 	local model = view.model
 	local root = location.repo_root(model.root or vim.fn.getcwd()) or model.root or vim.fn.getcwd()
 	local loc = line and { root = root, file = model.path, line = line, line_end = line_end, side = side } or nil
-	local revision = model.new_rev
+	local revision = side == "old" and model.old_rev or model.new_rev
 	if loc and revision and revision:match("^%x%x%x%x%x%x%x+") then
 		loc.revision, loc.hash = revision, revision
 	end
@@ -83,19 +91,13 @@ function M.range_location(bufnr, start_line, stop_line)
 end
 
 local function display_line(map, source, side)
-	if not source then
-		return nil
-	end
-	for line, entry in pairs(map.lines or {}) do
-		if entry[side] == source then
-			return line
-		end
-	end
+	return source and map["from_" .. side] and map["from_" .. side][source] or nil
 end
 
 function M.display_lines(value, bufnr)
 	local view = view_for(bufnr)
-	local map = view and (view:map_for("unified") or view:map_for("new") or view:map_for("old"))
+	local column = column_for(view, bufnr)
+	local map = column and column.map
 	if not map then
 		return {}
 	end

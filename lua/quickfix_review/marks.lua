@@ -429,6 +429,7 @@ function M.render(bufnr)
 					pcall(vim.api.nvim_buf_set_extmark, bufnr, namespace, line - 1, 0, {
 						virt_text = { { "  " .. text, "QuickfixReviewMark" } },
 						virt_text_pos = "eol",
+						hl_mode = "combine",
 						priority = 200,
 					})
 				end
