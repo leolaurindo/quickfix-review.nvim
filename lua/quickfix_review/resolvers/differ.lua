@@ -1,4 +1,4 @@
-local M = { name = "differ", priority = 90, renderable = false }
+local M = { name = "differ", priority = 90, renderable = true }
 local location = require("quickfix_review.location")
 
 local function view_for(bufnr)
@@ -80,6 +80,39 @@ function M.range_location(bufnr, start_line, stop_line)
 		loc.revision, loc.hash = revision, revision
 	end
 	return loc
+end
+
+local function display_line(map, source, side)
+	if not source then
+		return nil
+	end
+	for line, entry in pairs(map.lines or {}) do
+		if entry[side] == source then
+			return line
+		end
+	end
+end
+
+function M.display_lines(value, bufnr)
+	local view = view_for(bufnr)
+	local map = view and (view:map_for("unified") or view:map_for("new") or view:map_for("old"))
+	if not map then
+		return {}
+	end
+	local side = value.side or "new"
+	local first = display_line(map, value.line, side)
+	local last = display_line(map, value.line_end or value.line, side)
+	if first == last then
+		return first and { first } or {}
+	end
+	local lines = {}
+	if first then
+		lines[#lines + 1] = first
+	end
+	if last then
+		lines[#lines + 1] = last
+	end
+	return lines
 end
 
 return M

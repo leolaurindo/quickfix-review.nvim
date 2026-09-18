@@ -37,10 +37,6 @@ local function anchor(r, note, bufnr)
 	return note.location.line_end or note.location.line
 end
 
-local function at_endpoint(r, note, line)
-	return line == note.location.line or line == anchor(r, note)
-end
-
 local function contains(note, line)
 	local first = note.location.line
 	local last = note.location.line_end or first
@@ -56,7 +52,27 @@ local function matches(note, current)
 		and (not value.side or value.side == current.side)
 		and (not value.revision or value.revision == current.revision)
 		and (not value.hash or value.hash == current.hash)
-		and (not value.resolver or value.resolver == current.resolver)
+end
+
+local function display_lines(r, note, bufnr)
+	if r and type(r.display_lines) == "function" then
+		local ok, lines = pcall(r.display_lines, note.location, bufnr or vim.api.nvim_get_current_buf())
+		if ok and type(lines) == "table" then
+			return lines
+		end
+		return {}
+	end
+	local first, last = note.location.line, anchor(r, note, bufnr)
+	return first == last and { first } or { first, last }
+end
+
+local function at_endpoint(r, note, line, bufnr)
+	for _, endpoint in ipairs(display_lines(r, note, bufnr)) do
+		if line == endpoint then
+			return true
+		end
+	end
+	return false
 end
 
 local function collect()
@@ -159,12 +175,12 @@ local function refresh_hover_all(winid)
 		local offsets = {}
 		for _, note in ipairs(collect()) do
 			if matches(note, current) then
-				local first, last = note.location.line, anchor(r, note, state.bufnr)
-				local line = first and first >= first_visible and first <= last_visible and first
-					or last and last >= first_visible and last <= last_visible and last
-				if line then
-					offsets[line] = (offsets[line] or 0) + 1
-					open_note_popup(state, note, line, offsets[line] - 1)
+				for _, line in ipairs(display_lines(r, note, state.bufnr)) do
+					if line and line >= first_visible and line <= last_visible then
+						offsets[line] = (offsets[line] or 0) + 1
+						open_note_popup(state, note, line, offsets[line] - 1)
+						break
+					end
 				end
 			end
 		end
@@ -250,8 +266,8 @@ function M.render(bufnr)
 	local count = vim.api.nvim_buf_line_count(bufnr)
 	for _, note in ipairs(collect()) do
 		if matches(note, current) then
-			local first, last, text = note.location.line, anchor(r, note), indicator(note)
-			for _, line in ipairs(first == last and { first } or { first, last }) do
+			local text = indicator(note)
+			for _, line in ipairs(display_lines(r, note, bufnr)) do
 				if line and line >= 1 and line <= count and text and text ~= "" then
 					pcall(vim.api.nvim_buf_set_extmark, bufnr, namespace, line - 1, 0, {
 						virt_text = { { "  " .. text, "QuickfixReviewMark" } },
@@ -334,7 +350,8 @@ function M.hover(bufnr, opts)
 	end
 	local line, lines = vim.api.nvim_win_get_cursor(0)[1], {}
 	for _, note in ipairs(collect()) do
-		local at_line = opts.force and contains(note, line) or at_endpoint(r, note, line)
+		local at_line = opts.force and type(r.display_lines) ~= "function" and contains(note, line)
+			or at_endpoint(r, note, line, bufnr)
 		if matches(note, current) and at_line then
 			append_note(lines, note)
 		end
