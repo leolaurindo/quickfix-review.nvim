@@ -16,7 +16,11 @@ review.setup({ persist_review_list = false, agent = { response = { watch = false
 local owned, target = lists.ensure_owned({ title = "Quickfix Review" }, require("quickfix_review.scope").id(review.scope()))
 for line, text in pairs({ [2] = "first note", [4] = "second note" }) do
 	local item = { filename = vim.fs.joinpath(project, "README.md"), lnum = line, valid = 1, text = text, user_data = {} }
-	assert(annotations.set(item, { root = project, path = "README.md", line = line, resolver = "normal" }, text))
+	local value = { root = project, path = "README.md", line = line, resolver = "normal" }
+	if line == 4 then
+		value.side, value.revision = "old", "historical"
+	end
+	assert(annotations.set(item, value, text))
 	owned.items[#owned.items + 1] = item
 end
 assert(lists.replace(target, owned.items, 1, owned.changedtick))
@@ -40,6 +44,8 @@ end
 
 local badge = assert(floats()[1])
 assert(vim.deep_equal(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(badge), 0, -1, false), { "󰏫 2" }))
+marks.refresh_rail(buf)
+assert(floats()[1] == badge)
 assert(marks.hover_all(buf))
 local panel
 for _, winid in ipairs(floats()) do
@@ -49,7 +55,7 @@ for _, winid in ipairs(floats()) do
 end
 assert(panel)
 assert(vim.deep_equal(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(panel), 0, -1, false), {
-	"README.md:2", "first note", "", "README.md:4", "second note",
+	"README.md:2", "first note", "", "README.md:4 (old)", "second note",
 }))
 assert(not marks.hover_all(buf))
 assert(#floats() == 1)

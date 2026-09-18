@@ -129,7 +129,9 @@ local function matching_notes(bufnr, winid)
 	end
 	local notes = {}
 	for _, note in ipairs(collect()) do
-		if matches(note, current, r, bufnr) then
+		local value = location.canonical(note.location)
+		if (r.renderable and matches(note, current, r, bufnr))
+			or (not r.renderable and value and value.root == current.root and value.path == current.path) then
 			notes[#notes + 1] = note
 		end
 	end
@@ -138,6 +140,18 @@ local function matching_notes(bufnr, winid)
 		return a_line == b_line and a.id < b.id or a_line < b_line
 	end)
 	return notes, r
+end
+
+local function same_notes(a, b)
+	if #a ~= #b then
+		return false
+	end
+	for index, note in ipairs(a) do
+		if note.id ~= b[index].id then
+			return false
+		end
+	end
+	return true
 end
 
 local function render_rail(bufnr)
@@ -151,26 +165,31 @@ local function render_rail(bufnr)
 			if not r or r.renderable or #notes == 0 then
 				close_rail(winid)
 			else
-				close_rail(winid)
-				local text = indicator(notes[1]) .. " " .. #notes
-				local width = vim.fn.strdisplaywidth(text)
-				local buf = vim.api.nvim_create_buf(false, true)
-				vim.api.nvim_buf_set_lines(buf, 0, -1, false, { text })
-				vim.bo[buf].bufhidden = "wipe"
-				vim.bo[buf].modifiable = false
-				local badge = vim.api.nvim_open_win(buf, false, {
-					relative = "win",
-					win = winid,
-					row = 0,
-					col = math.max(0, vim.api.nvim_win_get_width(winid) - width),
-					width = width,
-					height = 1,
-					style = "minimal",
-					focusable = false,
-					zindex = 60,
-				})
-				vim.api.nvim_buf_add_highlight(buf, -1, "QuickfixReviewMark", 0, 0, -1)
-				rails[winid] = { winid = winid, bufnr = bufnr, badge = badge, notes = notes }
+				local state = rails[winid]
+				if state and state.bufnr == bufnr and vim.api.nvim_win_is_valid(state.badge) and same_notes(state.notes, notes) then
+					state.notes = notes
+				else
+					close_rail(winid)
+					local text = indicator(notes[1]) .. " " .. #notes
+					local width = vim.fn.strdisplaywidth(text)
+					local buf = vim.api.nvim_create_buf(false, true)
+					vim.api.nvim_buf_set_lines(buf, 0, -1, false, { text })
+					vim.bo[buf].bufhidden = "wipe"
+					vim.bo[buf].modifiable = false
+					local badge = vim.api.nvim_open_win(buf, false, {
+						relative = "win",
+						win = winid,
+						row = 0,
+						col = math.max(0, vim.api.nvim_win_get_width(winid) - width),
+						width = width,
+						height = 1,
+						style = "minimal",
+						focusable = false,
+						zindex = 60,
+					})
+					vim.api.nvim_buf_add_highlight(buf, -1, "QuickfixReviewMark", 0, 0, -1)
+					rails[winid] = { winid = winid, bufnr = bufnr, badge = badge, notes = notes }
+				end
 			end
 		end
 	end
@@ -439,6 +458,16 @@ function M.render(bufnr)
 					})
 				end
 			end
+		end
+	end
+end
+
+function M.refresh_rail(bufnr)
+	bufnr = bufnr or vim.api.nvim_get_current_buf()
+	if visible and vim.bo[bufnr].buftype ~= "quickfix" then
+		local r = resolver.detect(bufnr)
+		if r and not r.renderable then
+			render_rail(bufnr)
 		end
 	end
 end

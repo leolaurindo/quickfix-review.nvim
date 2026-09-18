@@ -1071,6 +1071,7 @@ function M.setup(opts)
 	vim.api.nvim_create_autocmd("CursorMoved", {
 		group = group,
 		callback = function(e)
+			marks.refresh_rail(e.buf)
 			hover_tick = hover_tick + 1
 			local tick = hover_tick
 			local delay = vim.bo[e.buf].buftype == "quickfix" and marks.quickfix_float_delay() or marks.float_delay()
