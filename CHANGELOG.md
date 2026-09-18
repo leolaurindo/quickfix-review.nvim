@@ -2,7 +2,17 @@
 
 All notable changes to Quickfix Review are documented here.
 
-## Unreleased
+## [0.3.0] - 2026-09-18
+
+### Added
+
+- Render review-note indicators at mapped source locations in Differ buffers.
+- Show a window-edge review-note count and an all-notes overlay for non-renderable buffers.
+
+### Fixed
+
+- Keep Differ indicators attached to their correct old/new or stacked diff rows across focus changes.
+- Preserve Differ hunk backgrounds behind review-note indicators.
 
 ## [0.2.1] - 2026-09-15
 
@@ -48,7 +58,8 @@ Initial public release.
 - Quickfix Actions and Export are required; Persist and Diffs are optional.
 - Neovim 0.10 or newer is required.
 
-[Unreleased]: https://github.com/leolaurindo/quickfix-review.nvim/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/leolaurindo/quickfix-review.nvim/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/leolaurindo/quickfix-review.nvim/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/leolaurindo/quickfix-review.nvim/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/leolaurindo/quickfix-review.nvim/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/leolaurindo/quickfix-review.nvim/releases/tag/v0.1.0

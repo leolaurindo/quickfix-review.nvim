@@ -7,7 +7,9 @@ local namespace = vim.api.nvim_create_namespace("quickfix_review")
 local visible, configured, enabled = true, true, true
 local hover_win
 local hover_all = {}
+local rails = {}
 local hover_all_refreshing = false
+local rail_rendering = false
 local glyph, float_enabled, float_delay, float_permanent = "󰏫", true, 500, false
 local quickfix_inline, quickfix_float_enabled, quickfix_float_delay, quickfix_float_permanent, quickfix_command =
 	true, true, 500, false, true
@@ -37,26 +39,47 @@ local function anchor(r, note, bufnr)
 	return note.location.line_end or note.location.line
 end
 
-local function at_endpoint(r, note, line)
-	return line == note.location.line or line == anchor(r, note)
-end
-
 local function contains(note, line)
 	local first = note.location.line
 	local last = note.location.line_end or first
 	return first and line >= math.min(first, last) and line <= math.max(first, last)
 end
 
-local function matches(note, current)
+local function matches(note, current, r, bufnr)
 	local value = location.canonical(note.location)
-	return value
-		and current
-		and value.root == current.root
-		and value.path == current.path
-		and (not value.side or value.side == current.side)
+	if not value or not current or value.root ~= current.root or value.path ~= current.path then
+		return false
+	end
+	if r and type(r.matches) == "function" then
+		local ok, matched = pcall(r.matches, value, bufnr)
+		if ok and matched ~= nil then
+			return matched
+		end
+	end
+	return (not value.side or value.side == current.side)
 		and (not value.revision or value.revision == current.revision)
 		and (not value.hash or value.hash == current.hash)
-		and (not value.resolver or value.resolver == current.resolver)
+end
+
+local function display_lines(r, note, bufnr)
+	if r and type(r.display_lines) == "function" then
+		local ok, lines = pcall(r.display_lines, note.location, bufnr or vim.api.nvim_get_current_buf())
+		if ok and type(lines) == "table" then
+			return lines
+		end
+		return {}
+	end
+	local first, last = note.location.line, anchor(r, note, bufnr)
+	return first == last and { first } or { first, last }
+end
+
+local function at_endpoint(r, note, line, bufnr)
+	for _, endpoint in ipairs(display_lines(r, note, bufnr)) do
+		if line == endpoint then
+			return true
+		end
+	end
+	return false
 end
 
 local function collect()
@@ -80,6 +103,144 @@ local function collect()
 	return out
 end
 
+local function close_rail_panel(state)
+	if state.panel and vim.api.nvim_win_is_valid(state.panel) then
+		vim.api.nvim_win_close(state.panel, true)
+	end
+	state.panel = nil
+end
+
+local function close_rail(winid)
+	local state = rails[winid]
+	if not state then
+		return
+	end
+	close_rail_panel(state)
+	if state.badge and vim.api.nvim_win_is_valid(state.badge) then
+		vim.api.nvim_win_close(state.badge, true)
+	end
+	rails[winid] = nil
+end
+
+local function matching_notes(bufnr, winid)
+	local current, r = resolver.location(bufnr, winid), resolver.detect(bufnr, winid)
+	if not current or not r then
+		return {}, r
+	end
+	local notes = {}
+	for _, note in ipairs(collect()) do
+		local value = location.canonical(note.location)
+		if (r.renderable and matches(note, current, r, bufnr))
+			or (not r.renderable and value and value.root == current.root and value.path == current.path) then
+			notes[#notes + 1] = note
+		end
+	end
+	table.sort(notes, function(a, b)
+		local a_line, b_line = a.location.line or math.huge, b.location.line or math.huge
+		return a_line == b_line and a.id < b.id or a_line < b_line
+	end)
+	return notes, r
+end
+
+local function same_notes(a, b)
+	if #a ~= #b then
+		return false
+	end
+	for index, note in ipairs(a) do
+		if note.id ~= b[index].id then
+			return false
+		end
+	end
+	return true
+end
+
+local function render_rail(bufnr)
+	if rail_rendering then
+		return
+	end
+	rail_rendering = true
+	for _, winid in ipairs(vim.api.nvim_list_wins()) do
+		if vim.api.nvim_win_is_valid(winid) and vim.api.nvim_win_get_buf(winid) == bufnr then
+			local notes, r = matching_notes(bufnr, winid)
+			if not r or r.renderable or #notes == 0 then
+				close_rail(winid)
+			else
+				local state = rails[winid]
+				if state and state.bufnr == bufnr and vim.api.nvim_win_is_valid(state.badge) and same_notes(state.notes, notes) then
+					state.notes = notes
+				else
+					close_rail(winid)
+					local text = indicator(notes[1]) .. " " .. #notes
+					local width = vim.fn.strdisplaywidth(text)
+					local buf = vim.api.nvim_create_buf(false, true)
+					vim.api.nvim_buf_set_lines(buf, 0, -1, false, { text })
+					vim.bo[buf].bufhidden = "wipe"
+					vim.bo[buf].modifiable = false
+					local badge = vim.api.nvim_open_win(buf, false, {
+						relative = "win",
+						win = winid,
+						row = 0,
+						col = math.max(0, vim.api.nvim_win_get_width(winid) - width),
+						width = width,
+						height = 1,
+						style = "minimal",
+						focusable = false,
+						zindex = 60,
+					})
+					vim.api.nvim_buf_add_highlight(buf, -1, "QuickfixReviewMark", 0, 0, -1)
+					rails[winid] = { winid = winid, bufnr = bufnr, badge = badge, notes = notes }
+				end
+			end
+		end
+	end
+	rail_rendering = false
+end
+
+local function rail_note_title(note)
+	local value = note.location
+	local title = value.path or value.file or "file"
+	if value.line then
+		title = title .. ":" .. value.line .. (value.line_end and "-" .. value.line_end or "")
+	end
+	return value.side and title .. " (" .. value.side .. ")" or title
+end
+
+local function open_rail_panel(state)
+	local lines = {}
+	for _, note in ipairs(state.notes) do
+		if #lines > 0 then
+			lines[#lines + 1] = ""
+		end
+		lines[#lines + 1] = rail_note_title(note)
+		vim.list_extend(lines, vim.split(note.text or "", "\n", { plain = true }))
+	end
+	local width = 1
+	for _, line in ipairs(lines) do
+		width = math.max(width, vim.fn.strdisplaywidth(line))
+	end
+	local win_width = vim.api.nvim_win_get_width(state.winid)
+	width = math.min(width, math.max(1, win_width - 2))
+	local height = math.min(#lines, math.max(1, vim.api.nvim_win_get_height(state.winid) - 2))
+	local buf = vim.api.nvim_create_buf(false, true)
+	vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+	vim.bo[buf].bufhidden = "wipe"
+	vim.bo[buf].modifiable = false
+	state.panel = vim.api.nvim_open_win(buf, false, {
+		relative = "win",
+		win = state.winid,
+		row = 1,
+		col = math.max(0, win_width - width),
+		width = width,
+		height = height,
+		style = "minimal",
+		border = "rounded",
+		focusable = false,
+		zindex = 61,
+		title = " Quickfix Review ",
+		title_pos = "center",
+	})
+end
+
 local function close_hover_all(winid, disable)
 	local state = hover_all[winid]
 	if not state then
@@ -99,6 +260,20 @@ end
 local function close_all_hover_all()
 	for winid in pairs(hover_all) do
 		close_hover_all(winid, true)
+	end
+end
+
+local function close_all_rails()
+	for winid in pairs(rails) do
+		close_rail(winid)
+	end
+end
+
+local function close_rails_for_buffer(bufnr)
+	for winid, state in pairs(rails) do
+		if state.bufnr == bufnr then
+			close_rail(winid)
+		end
 	end
 end
 
@@ -158,13 +333,13 @@ local function refresh_hover_all(winid)
 		local first_visible, last_visible = visible_range(winid)
 		local offsets = {}
 		for _, note in ipairs(collect()) do
-			if matches(note, current) then
-				local first, last = note.location.line, anchor(r, note, state.bufnr)
-				local line = first and first >= first_visible and first <= last_visible and first
-					or last and last >= first_visible and last <= last_visible and last
-				if line then
-					offsets[line] = (offsets[line] or 0) + 1
-					open_note_popup(state, note, line, offsets[line] - 1)
+			if matches(note, current, r, state.bufnr) then
+				for _, line in ipairs(display_lines(r, note, state.bufnr)) do
+					if line and line >= first_visible and line <= last_visible then
+						offsets[line] = (offsets[line] or 0) + 1
+						open_note_popup(state, note, line, offsets[line] - 1)
+						break
+					end
 				end
 			end
 		end
@@ -175,6 +350,7 @@ end
 function M.setup(opts)
 	opts = opts or {}
 	close_all_hover_all()
+	close_all_rails()
 	local nerd_font = opts.nerd_font ~= false
 	configured, glyph = opts.inline ~= false, opts.glyph == nil and (nerd_font and "󰏫" or "✎") or opts.glyph
 	local float = opts.float or {}
@@ -203,12 +379,29 @@ function M.setup(opts)
 			for winid in pairs(hover_all) do
 				refresh_hover_all(winid)
 			end
+			local bufs = {}
+			for _, state in pairs(rails) do
+				bufs[state.bufnr] = true
+			end
+			for bufnr in pairs(bufs) do
+				M.render(bufnr)
+			end
 		end,
 	})
 	vim.api.nvim_create_autocmd({ "BufLeave", "WinLeave" }, {
 		group = hover_group,
 		callback = function()
-			close_hover_all(vim.api.nvim_get_current_win(), true)
+			local winid = vim.api.nvim_get_current_win()
+			close_hover_all(winid, true)
+			if rails[winid] then
+				close_rail_panel(rails[winid])
+			end
+		end,
+	})
+	vim.api.nvim_create_autocmd("WinClosed", {
+		group = hover_group,
+		callback = function(event)
+			close_rail(tonumber(event.match))
 		end,
 	})
 	visible = configured and enabled
@@ -218,9 +411,11 @@ function M.render(bufnr)
 	bufnr = bufnr or vim.api.nvim_get_current_buf()
 	vim.api.nvim_buf_clear_namespace(bufnr, namespace, 0, -1)
 	if not visible then
+		close_rails_for_buffer(bufnr)
 		return
 	end
 	if vim.bo[bufnr].buftype == "quickfix" then
+		close_rails_for_buffer(bufnr)
 		if not quickfix_inline then
 			return
 		end
@@ -245,21 +440,34 @@ function M.render(bufnr)
 	local r = resolver.detect(bufnr)
 	local current = resolver.location(bufnr)
 	if not r or not r.renderable or not current then
+		render_rail(bufnr)
 		return
 	end
+	render_rail(bufnr)
 	local count = vim.api.nvim_buf_line_count(bufnr)
 	for _, note in ipairs(collect()) do
-		if matches(note, current) then
-			local first, last, text = note.location.line, anchor(r, note), indicator(note)
-			for _, line in ipairs(first == last and { first } or { first, last }) do
+		if matches(note, current, r, bufnr) then
+			local text = indicator(note)
+			for _, line in ipairs(display_lines(r, note, bufnr)) do
 				if line and line >= 1 and line <= count and text and text ~= "" then
 					pcall(vim.api.nvim_buf_set_extmark, bufnr, namespace, line - 1, 0, {
 						virt_text = { { "  " .. text, "QuickfixReviewMark" } },
 						virt_text_pos = "eol",
+						hl_mode = "combine",
 						priority = 200,
 					})
 				end
 			end
+		end
+	end
+end
+
+function M.refresh_rail(bufnr)
+	bufnr = bufnr or vim.api.nvim_get_current_buf()
+	if visible and vim.bo[bufnr].buftype ~= "quickfix" then
+		local r = resolver.detect(bufnr)
+		if r and not r.renderable then
+			render_rail(bufnr)
 		end
 	end
 end
@@ -329,13 +537,14 @@ function M.hover(bufnr, opts)
 	end
 	bufnr = bufnr or vim.api.nvim_get_current_buf()
 	local current, r = resolver.location(bufnr), resolver.detect(bufnr)
-	if not current or not r then
+	if not current or not r or not r.renderable then
 		return
 	end
 	local line, lines = vim.api.nvim_win_get_cursor(0)[1], {}
 	for _, note in ipairs(collect()) do
-		local at_line = opts.force and contains(note, line) or at_endpoint(r, note, line)
-		if matches(note, current) and at_line then
+		local at_line = opts.force and type(r.display_lines) ~= "function" and contains(note, line)
+			or at_endpoint(r, note, line, bufnr)
+		if matches(note, current, r, bufnr) and at_line then
 			append_note(lines, note)
 		end
 	end
@@ -356,6 +565,22 @@ function M.hover_all(bufnr)
 	if not current or not r then
 		return false
 	end
+	if not r.renderable then
+		local state = rails[winid]
+		if not state or state.bufnr ~= bufnr then
+			render_rail(bufnr)
+			state = rails[winid]
+		end
+		if not state then
+			return false
+		end
+		if state.panel then
+			close_rail_panel(state)
+			return false
+		end
+		open_rail_panel(state)
+		return true
+	end
 	if hover_win and vim.api.nvim_win_is_valid(hover_win) then
 		close_hover()
 	end
@@ -365,8 +590,14 @@ function M.hover_all(bufnr)
 end
 
 function M.refresh()
+	local bufs = {}
 	for _, win in ipairs(vim.api.nvim_list_wins()) do
-		M.render(vim.api.nvim_win_get_buf(win))
+		if vim.api.nvim_win_get_config(win).relative == "" then
+			bufs[vim.api.nvim_win_get_buf(win)] = true
+		end
+	end
+	for bufnr in pairs(bufs) do
+		M.render(bufnr)
 	end
 	for winid in pairs(hover_all) do
 		refresh_hover_all(winid)
