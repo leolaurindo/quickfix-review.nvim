@@ -2,7 +2,7 @@
 
 All notable changes to Quickfix Review are documented here.
 
-## [Unreleased]
+## [0.3.1] - 2026-09-22
 
 ### Added
 
