@@ -177,6 +177,9 @@ notes.setup({
 	scope_policy = "repository",
 	agent = { response = { watch = false } },
 })
+-- setup resolves the scope (and its agent watcher) on the next event-loop tick:
+-- let that pending work run before the watcher exercised below is installed.
+vim.wait(100)
 assert(vim.fn.writefile({ vim.json.encode({
 	version = 1,
 	origin = "agent",
