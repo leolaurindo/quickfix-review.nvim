@@ -2,6 +2,16 @@
 
 All notable changes to Quickfix Review are documented here.
 
+## [Unreleased]
+
+### Changed
+
+- Resolve the review scope on the next event-loop tick instead of inside `setup()`. The two
+  `git` calls that produce it (`rev-parse --show-toplevel`, `symbolic-ref --short HEAD`) are
+  the most expensive thing `setup()` does, and they no longer sit on the startup path. Code
+  that reads `M.scope()`, or depends on a restored review list or the agent watcher,
+  immediately after `setup()` needs to wait for that tick.
+
 ## [0.3.1] - 2026-09-22
 
 ### Added

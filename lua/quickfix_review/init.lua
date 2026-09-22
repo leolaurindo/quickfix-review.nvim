@@ -1053,11 +1053,17 @@ function M.setup(opts)
 	resolver.register(require("quickfix_review.resolvers.generic"))
 	sender.set_default(config.get().send)
 	marks.setup(config.get())
-	local scope_changed = refresh_scope(true)
-	if not scope_changed then
-		configure_agent()
-	end
-	marks.refresh()
+	-- Resolving the scope spawns two `git` processes (`rev-parse --show-toplevel`
+	-- and `symbolic-ref --short HEAD`), which is the most expensive thing setup
+	-- does. Defer it by one event-loop tick: nothing reads the scope before the
+	-- first user action, and setup itself does not need it.
+	vim.schedule(function()
+		local scope_changed = refresh_scope(true)
+		if not scope_changed then
+			configure_agent()
+		end
+		marks.refresh()
+	end)
 	if setup_done then
 		return M
 	end

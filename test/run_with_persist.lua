@@ -44,6 +44,10 @@ notes.setup({
 	scope_policy = "repository",
 	agent = { response = { watch = false } },
 })
+-- setup restores the persisted review list on the next event-loop tick.
+assert(vim.wait(1000, function()
+	return watches == 1
+end))
 assert(saves == 0 and watches == 1)
 persist.save, persist.watch = save, watch
 assert(persist.delete({ namespace = "quickfix_review", name = "review", scope = review_scope }))

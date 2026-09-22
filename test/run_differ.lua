@@ -45,6 +45,10 @@ local annotations = require("quickfix_review.annotations")
 local lists = require("quickfix_review.lists")
 local marks = require("quickfix_review.marks")
 review.setup({ persist_review_list = false, agent = { response = { watch = false } } })
+-- setup resolves the scope on the next event-loop tick (it spawns two git processes).
+assert(vim.wait(1000, function()
+	return review.scope() ~= nil
+end))
 
 local owned, target = lists.ensure_owned({ title = "Quickfix Review" }, require("quickfix_review.scope").id(review.scope()))
 for _, note in ipairs({
