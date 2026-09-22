@@ -1020,6 +1020,7 @@ local function install_commands()
 	command("QuickfixReviewHoverAll", function()
 		marks.hover_all(vim.api.nvim_get_current_buf())
 	end, { desc = "Toggle note overlays at visible source endpoints" })
+	command("QuickfixReviewHoverToggle", marks.hover_toggle, { desc = "Toggle the automatic note hover" })
 	command("QuickfixReviewNext", M.next, { desc = "Pick the next Quickfix Review annotation" })
 	command("QuickfixReviewPrev", M.prev, { desc = "Pick the previous Quickfix Review annotation" })
 	command("QuickfixReviewSend", function(o)
@@ -1080,8 +1081,9 @@ function M.setup(opts)
 			local tick = hover_tick
 			local delay = vim.bo[e.buf].buftype == "quickfix" and marks.quickfix_float_delay() or marks.float_delay()
 			-- Deferred so it lands once the cursor rests. It must stay a no-op unless
-			-- the notes under the cursor changed: this update happens on an idle
-			-- screen, and an idle repaint is exactly what reads as a flicker.
+			-- the notes under the cursor changed, and it must not run blocking work or
+			-- shell commands (see the note on hover_payload): this runs on an otherwise
+			-- idle screen, where any extra work is visible as a flicker.
 			if delay then
 				vim.defer_fn(function()
 					if tick == hover_tick and vim.api.nvim_get_current_buf() == e.buf then
@@ -1094,8 +1096,15 @@ function M.setup(opts)
 	vim.api.nvim_create_autocmd({ "DirChanged", "FocusGained", "ShellCmdPost" }, {
 		group = group,
 		callback = function()
+			-- The cached repo root can change when the working directory moves.
+			pcall(require("quickfix_review.location").clear_cache)
+
+			-- refresh_scope() re-renders the marks itself when the scope really changed.
+			-- Re-rendering here unconditionally (marks.refresh()) cleared and rewrote
+			-- every note mark on each of these events even when nothing about the marks
+			-- had changed - a repaint of marked lines with no cursor movement and no popup
+			-- involved.
 			refresh_scope(true)
-			marks.refresh()
 		end,
 	})
 	vim.api.nvim_create_autocmd("User", {

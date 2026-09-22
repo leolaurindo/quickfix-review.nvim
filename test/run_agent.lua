@@ -264,10 +264,29 @@ vim.cmd.edit(filename)
 marks.render(0)
 assert(marker_count(0, "󰚩") == 2)
 assert(marker_count(0, "󰏫") == 1)
-local preview = vim.lsp.util.open_floating_preview
+-- Count hover draws: one per float window creation, plus one per content update of the
+-- hover buffer (the float itself is reused now).
+local open_win, set_lines = vim.api.nvim_open_win, vim.api.nvim_buf_set_lines
 local previews = 0
-vim.lsp.util.open_floating_preview = function()
-	previews = previews + 1
+local function is_float_buf(buf)
+	for _, win in ipairs(vim.fn.win_findbuf(buf)) do
+		if vim.api.nvim_win_get_config(win).relative ~= "" then
+			return true
+		end
+	end
+	return false
+end
+vim.api.nvim_open_win = function(buf, enter, config)
+	if config and config.relative and config.relative ~= "" then
+		previews = previews + 1
+	end
+	return open_win(buf, enter, config)
+end
+vim.api.nvim_buf_set_lines = function(buf, ...)
+	if is_float_buf(buf) then
+		previews = previews + 1
+	end
+	return set_lines(buf, ...)
 end
 vim.api.nvim_win_set_cursor(0, { 2, 0 })
 marks.hover(0)
@@ -279,7 +298,7 @@ marks.hover(0)
 vim.api.nvim_win_set_cursor(0, { 3, 0 })
 marks.hover(0)
 assert(previews == 3)
-vim.lsp.util.open_floating_preview = preview
+vim.api.nvim_open_win, vim.api.nvim_buf_set_lines = open_win, set_lines
 
 local source_win = vim.api.nvim_get_current_win()
 local function overlay_count()

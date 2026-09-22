@@ -37,6 +37,13 @@ local first = assert(hover_float(), "hover must open on a note line")
 local text = table.concat(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(first), 0, -1, false), "\n")
 assert(text:find("hover note", 1, true))
 
+-- Placement: beside the end of the text on the cursor's line, never over the cursor.
+local config = vim.api.nvim_win_get_config(first)
+local cursor_pos = vim.fn.screenpos(0, 3, 1)
+local text_end = cursor_pos.col - 1 + vim.fn.strdisplaywidth(vim.api.nvim_get_current_line())
+assert(config.relative == "editor", "hover must be placed on the screen, not relative to the cursor")
+assert(config.col >= text_end, "hover must start after the end of the text")
+
 -- Stopping on the note that is already displayed redraws nothing.
 marks.hover(0)
 assert(hover_float() == first, "the displayed note must be reused, not recreated")
@@ -51,6 +58,16 @@ assert(hover_float() == first, "moving inside the line must not rebuild the floa
 vim.api.nvim_win_set_cursor(0, { 4, 0 })
 vim.api.nvim_exec_autocmds("CursorMoved", { buffer = 0 })
 assert(not hover_float(), "leaving the note line must close the float")
+
+-- The automatic hover has its own runtime switch (marks/rails untouched).
+assert(vim.fn.exists(":QuickfixReviewHoverToggle") == 2)
+marks.hover_toggle()
+assert(marks.float_delay() == nil and not hover_float(), "toggle off must stop and close the hover")
+vim.api.nvim_win_set_cursor(0, { 3, 0 })
+marks.hover(0)
+assert(not hover_float(), "no automatic hover while the toggle is off")
+marks.hover_toggle()
+assert(marks.float_delay() ~= nil)
 
 -- Returning to the note may open it again.
 vim.api.nvim_win_set_cursor(0, { 3, 0 })
