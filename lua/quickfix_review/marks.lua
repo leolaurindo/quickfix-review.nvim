@@ -5,7 +5,31 @@ local location = require("quickfix_review.location")
 local resolver = require("quickfix_review.resolver")
 local namespace = vim.api.nvim_create_namespace("quickfix_review")
 local visible, configured, enabled = true, true, true
+-- Hover redraw discipline - the rules that keep the note popup from flickering.
+-- They came from a real bug: the hover was rebuilt on every movement, so each stop
+-- painted a fresh frame (and hid the cursor while doing it) and the next movement
+-- erased it. When touching this code:
+--   * never draw from CursorMoved unless the *payload* under the cursor changed
+--     (see hover_payload/hover_follow): "the cursor moved" is not a reason to draw;
+--   * never close and reopen the float to change its text - rewrite it through
+--     `_update_win` (what vim.diagnostic/vim.lsp floats do) and only recreate the
+--     window when the content height changes;
+--   * never list "CursorMoved" in the float's close_events;
+--   * rails follow the window, not the cursor: refresh them from BufEnter/WinScrolled/
+--     WinResized and never run M.render() from a scroll handler;
+--   * anything scheduled with vim.defer_fn() from CursorMoved runs on an idle screen,
+--     so it must be a no-op unless something actually changed;
+--   * and it must not do blocking work either. The hover path used to resolve the repo
+--     root with a synchronous `git rev-parse` (location.repo_root), i.e. a git process on
+--     every cursor move and every hover; that was the last thing making this plugin's
+--     users see a flickering cursor. Anything on this path has to be cheap and cached.
 local hover_win
+local hover_buf
+local hover_key -- payload currently displayed (nil when nothing is shown)
+local hover_auto = true -- automatic hover; runtime switch: M.hover_toggle()
+local hover_lines_count
+local hover_geometry -- last placed row/col/width/height, so an unchanged hover never moves
+local hover_group = vim.api.nvim_create_augroup("QuickfixReviewHover", { clear = true })
 local hover_all = {}
 local rails = {}
 local hover_all_refreshing = false
@@ -23,10 +47,41 @@ local function indicator(note, quickfix)
 end
 
 local function close_hover()
+	pcall(vim.api.nvim_clear_autocmds, { group = hover_group })
 	if hover_win and vim.api.nvim_win_is_valid(hover_win) then
+		local buf = hover_buf
 		vim.api.nvim_win_close(hover_win, true)
+		if buf and vim.api.nvim_buf_is_valid(buf) then
+			pcall(vim.api.nvim_buf_delete, buf, { force = true })
+		end
 	end
-	hover_win = nil
+	hover_win, hover_buf, hover_key, hover_lines_count, hover_geometry = nil, nil, nil, nil, nil
+end
+
+-- Where the hover belongs: next to the end of the text on the line it refers to (the
+-- cursor's line, not the end of a range), so it never covers the cursor or the text.
+-- Returns 0-based screen row/col plus the content size.
+local function hover_geometry_for(lines)
+	local text_width = 0
+	for _, line in ipairs(lines) do
+		text_width = math.max(text_width, vim.fn.strdisplaywidth(line))
+	end
+	local width = math.min(text_width + 2, math.min(80, vim.o.columns - 8))
+	local height = #lines
+
+	local lnum = vim.api.nvim_win_get_cursor(0)[1]
+	local line = vim.api.nvim_get_current_line()
+	local pos = vim.fn.screenpos(0, lnum, math.max(1, #line))
+	local row, col
+	if type(pos) == "table" and pos.row > 0 then
+		row, col = pos.row - 1, pos.col + 1
+	else
+		row, col = vim.fn.winline() - 1, vim.fn.wincol()
+	end
+	return math.max(0, math.min(row, vim.o.lines - height - 3)),
+		math.max(0, math.min(col, vim.o.columns - width - 2)),
+		width,
+		height
 end
 
 local function anchor(r, note, bufnr)
@@ -219,10 +274,16 @@ local function open_rail_panel(state)
 		width = math.max(width, vim.fn.strdisplaywidth(line))
 	end
 	local win_width = vim.api.nvim_win_get_width(state.winid)
-	width = math.min(width, math.max(1, win_width - 2))
+	local panel_title = " Quickfix Review "
+	-- Never narrower than its own title, or nvim clips it and shows a "<" marker.
+	width = math.min(math.max(width + 2, #panel_title), math.max(1, win_width - 2))
+	local padded = {}
+	for _, line in ipairs(lines) do
+		padded[#padded + 1] = " " .. line
+	end
 	local height = math.min(#lines, math.max(1, vim.api.nvim_win_get_height(state.winid) - 2))
 	local buf = vim.api.nvim_create_buf(false, true)
-	vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+	vim.api.nvim_buf_set_lines(buf, 0, -1, false, padded)
 	vim.bo[buf].bufhidden = "wipe"
 	vim.bo[buf].modifiable = false
 	state.panel = vim.api.nvim_open_win(buf, false, {
@@ -236,7 +297,7 @@ local function open_rail_panel(state)
 		border = "rounded",
 		focusable = false,
 		zindex = 61,
-		title = " Quickfix Review ",
+		title = panel_title,
 		title_pos = "center",
 	})
 end
@@ -292,10 +353,14 @@ local function open_note_popup(state, note, line, offset)
 	for _, text in ipairs(lines) do
 		width = math.max(width, vim.fn.strdisplaywidth(text))
 	end
-	width = math.min(width, math.max(1, source_width - 4))
+	width = math.min(width + 2, math.max(1, source_width - 4))
 	local height = math.max(1, math.min(#lines, 10))
+	local padded = {}
+	for _, line in ipairs(lines) do
+		padded[#padded + 1] = " " .. line
+	end
 	local buf = vim.api.nvim_create_buf(false, true)
-	vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+	vim.api.nvim_buf_set_lines(buf, 0, -1, false, padded)
 	vim.bo[buf].bufhidden = "wipe"
 	vim.bo[buf].modifiable = false
 	local popup = vim.api.nvim_open_win(buf, false, {
@@ -310,8 +375,6 @@ local function open_note_popup(state, note, line, offset)
 		border = "rounded",
 		focusable = false,
 		zindex = 60 + offset,
-		title = annotations.origin(note) == "agent" and " Agent note " or " Quickfix note ",
-		title_pos = "center",
 	})
 	vim.wo[popup].wrap = true
 	state.popups[#state.popups + 1] = popup
@@ -379,12 +442,14 @@ function M.setup(opts)
 			for winid in pairs(hover_all) do
 				refresh_hover_all(winid)
 			end
-			local bufs = {}
-			for _, state in pairs(rails) do
-				bufs[state.bufnr] = true
-			end
-			for bufnr in pairs(bufs) do
-				M.render(bufnr)
+			-- Rails/badges only need to follow the window, and render_rail() already
+			-- skips windows whose notes did not change. Re-running M.render() here
+			-- cleared and rewrote every mark in the buffer on each scroll (a full
+			-- repaint on an otherwise idle screen). Rail rendering only.
+			for winid, state in pairs(rails) do
+				if vim.api.nvim_win_is_valid(winid) then
+					render_rail(state.bufnr)
+				end
 			end
 		end,
 	})
@@ -473,6 +538,9 @@ function M.refresh_rail(bufnr)
 end
 
 function M.float_delay()
+	if not hover_auto then
+		return nil -- automatic hover off: nothing is scheduled, nothing is drawn
+	end
 	return visible and float_enabled and (float_permanent and 0 or float_delay) or nil
 end
 
@@ -489,19 +557,118 @@ local function append_note(lines, note)
 	vim.list_extend(lines, vim.split(note.text or "", "\n", { plain = true }))
 end
 
-local function open_hover(lines, title)
+-- A plain box: no title. The window is sized to the note text plus one column of padding
+-- per side, and the content is padded to match, so the text is not glued to the left
+-- border. (A title would also be clipped, with a "<" marker, whenever the box is narrower
+-- than the title.)
+local function open_hover(lines, key)
 	if #lines == 0 then
 		return
 	end
-	local _, win = vim.lsp.util.open_floating_preview(lines, "text", {
+	local row, col, width, height = hover_geometry_for(lines)
+	local moved = not hover_geometry
+		or hover_geometry[1] ~= row
+		or hover_geometry[2] ~= col
+		or hover_geometry[3] ~= width
+		or hover_geometry[4] ~= height
+
+	local padded = {}
+	for _, line in ipairs(lines) do
+		padded[#padded + 1] = " " .. line
+	end
+
+	if hover_win and vim.api.nvim_win_is_valid(hover_win) and hover_buf and vim.api.nvim_buf_is_valid(hover_buf) then
+		if key == hover_key then
+			-- Same notes in the same place: nothing to draw at all.
+			if not moved then
+				return
+			end
+			-- Same notes, but the cursor's line moved on screen: reposition only.
+			vim.api.nvim_win_set_config(hover_win, { relative = "editor", row = row, col = col })
+			hover_geometry = { row, col, width, height }
+			return
+		end
+		vim.bo[hover_buf].modifiable = true
+		vim.api.nvim_buf_set_lines(hover_buf, 0, -1, false, padded)
+		vim.bo[hover_buf].modifiable = false
+		vim.api.nvim_win_set_config(hover_win, {
+			relative = "editor",
+			row = row,
+			col = col,
+			width = width,
+			height = height,
+		})
+		hover_key, hover_lines_count, hover_geometry = key, #lines, { row, col, width, height }
+		return
+	end
+
+	close_hover()
+	local buf = vim.api.nvim_create_buf(false, true)
+	vim.api.nvim_buf_set_lines(buf, 0, -1, false, padded)
+	local win = vim.api.nvim_open_win(buf, false, {
+		relative = "editor",
+		row = row,
+		col = col,
+		width = width,
+		height = height,
+		style = "minimal",
 		border = "rounded",
 		focusable = false,
-		max_width = math.min(80, vim.o.columns - 8),
-		title = title,
-		title_pos = "center",
-		close_events = { "CursorMoved", "InsertCharPre", "BufLeave", "WinLeave" },
+		zindex = 50,
 	})
-	hover_win = win
+	vim.bo[buf].modifiable = false
+	-- Not "CursorMoved": the hover is closed when the notes under the cursor change.
+	for _, event in ipairs({ "InsertCharPre", "BufLeave", "WinLeave" }) do
+		vim.api.nvim_create_autocmd(event, { group = hover_group, callback = close_hover })
+	end
+	hover_win, hover_buf, hover_key, hover_lines_count, hover_geometry = win, buf, key, #lines, { row, col, width, height }
+end
+
+-- The notes that belong under the cursor right now, as both text and identity.
+-- Both hover() and hover_follow() work off this, so "same notes" is what decides
+-- whether anything is drawn - never "did the cursor move". It runs on every CursorMoved
+-- and from the deferred hover, so keep it cheap: no shell commands, no blocking calls,
+-- no work that is not cached (a synchronous `git` call here once made every cursor move
+-- fork a process and flicker the cursor).
+local function hover_payload(bufnr, opts)
+	opts = opts or {}
+	bufnr = bufnr or vim.api.nvim_get_current_buf()
+	local current, r = resolver.location(bufnr), resolver.detect(bufnr)
+	if not current or not r or not r.renderable then
+		return nil, nil
+	end
+	local line, lines = vim.api.nvim_win_get_cursor(0)[1], {}
+	for _, note in ipairs(collect()) do
+		local at_line = opts.force and type(r.display_lines) ~= "function" and contains(note, line)
+			or at_endpoint(r, note, line, bufnr)
+		if matches(note, current, r, bufnr) and at_line then
+			append_note(lines, note)
+		end
+	end
+	return lines, table.concat(lines, "\n")
+end
+
+-- CursorMoved follow-up: keep the hover while it still describes the cursor, close
+-- it only when those notes are gone. Redrawing on every movement is what flickers,
+-- so this function must never draw - hover() is the only path that may.
+function M.hover_follow()
+	if not (hover_win and vim.api.nvim_win_is_valid(hover_win)) then
+		return
+	end
+	local _, key = hover_payload(vim.api.nvim_get_current_buf(), {})
+	if key ~= hover_key then
+		close_hover()
+	end
+end
+
+-- Runtime switch for the *automatic* hover only: unlike M.hide/M.show this leaves
+-- marks and rails alone, and :QuickfixReviewHover still shows a note on demand.
+function M.hover_toggle()
+	hover_auto = not hover_auto
+	if not hover_auto then
+		close_hover()
+	end
+	return hover_auto
 end
 
 function M.hover_qf(bufnr, opts)
@@ -517,8 +684,8 @@ function M.hover_qf(bufnr, opts)
 	if not note then
 		return
 	end
-	local title = annotations.origin(note) == "agent" and " Agent note " or " Quickfix note "
-	open_hover(vim.split(note.text or "", "\n", { plain = true }), title)
+	local lines = vim.split(note.text or "", "\n", { plain = true })
+	open_hover(lines, table.concat(lines, "\n"))
 end
 
 function M.hover(bufnr, opts)
@@ -529,26 +696,13 @@ function M.hover(bufnr, opts)
 	if not opts.force and not M.float_delay() then
 		return
 	end
-	if hover_win and vim.api.nvim_win_is_valid(hover_win) then
-		if not opts.force then
-			return
-		end
-		close_hover()
-	end
 	bufnr = bufnr or vim.api.nvim_get_current_buf()
-	local current, r = resolver.location(bufnr), resolver.detect(bufnr)
-	if not current or not r or not r.renderable then
+	local lines, key = hover_payload(bufnr, opts)
+	if not lines or #lines == 0 then
+		close_hover() -- no notes here: this is the only thing that should close it
 		return
 	end
-	local line, lines = vim.api.nvim_win_get_cursor(0)[1], {}
-	for _, note in ipairs(collect()) do
-		local at_line = opts.force and type(r.display_lines) ~= "function" and contains(note, line)
-			or at_endpoint(r, note, line, bufnr)
-		if matches(note, current, r, bufnr) and at_line then
-			append_note(lines, note)
-		end
-	end
-	open_hover(lines, " Quickfix note ")
+	open_hover(lines, key)
 end
 
 function M.hover_all(bufnr)

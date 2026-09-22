@@ -2,6 +2,33 @@
 
 All notable changes to Quickfix Review are documented here.
 
+## [Unreleased]
+
+### Added
+
+- `:QuickfixReviewHoverToggle` (and `marks.hover_toggle()`) to switch the automatic note
+  hover off and on at runtime without hiding marks or rails.
+
+### Changed
+
+- The note hover is placed at the end of the text on the cursor's line instead of at the
+  cursor, so it no longer covers the cursor or the line it describes, and the box is sized
+  to the note text with one column of padding on each side (the content is padded too, so
+  the text is not glued to the left border).
+- The note hover and the note overlays are plain boxes: the ` Quickfix note ` /
+  ` Agent note ` titles are gone. A title wider than the note text was clipped by nvim and
+  shown with a `<` marker.
+
+### Fixed
+
+- Stop redrawing the hover and the marks when nothing changed: the hover float is reused
+  and kept while the notes under the cursor stay the same, rails are no longer refreshed on
+  `CursorMoved`, and marks are no longer re-rendered on `WinScrolled` or on unrelated
+  events.
+- Stop running a `git rev-parse` on every cursor move and every hover (`repo_root()` is now
+  cached). That blocking process was the last cause of a flickering cursor while notes are
+  visible.
+
 ## [0.3.0] - 2026-09-18
 
 ### Added

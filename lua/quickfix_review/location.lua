@@ -14,16 +14,37 @@ local function absolute(root, path)
 	return normalize(vim.fs.joinpath(root or vim.fn.getcwd(), path))
 end
 
+-- `repo_root` used to run a synchronous `git rev-parse --show-toplevel` on every call,
+-- and it sits on the hover path (hover_payload -> resolver.location -> normal.resolve),
+-- i.e. a git process per cursor move and per hover. That blocking call was the last
+-- thing making the note hover visibly flicker the cursor: it is cheap and invisible when
+-- it happens inside a cursor gesture (float.permanent / delay 0), but on the deferred
+-- hover it fires on an otherwise idle screen. The result only depends on the filesystem,
+-- so resolve it once per path and drop the cache when the working directory changes.
+local repo_root_cache = {}
+
 function M.repo_root(path)
 	path = path or vim.fn.getcwd()
 	if vim.fn.filereadable(path) == 1 then
 		path = vim.fn.fnamemodify(path, ":p:h")
 	end
+	local cached = repo_root_cache[path]
+	if cached then
+		return cached
+	end
+	local root
 	local result = vim.fn.system({ "git", "-C", path, "rev-parse", "--show-toplevel" })
 	if vim.v.shell_error == 0 and vim.trim(result) ~= "" then
-		return normalize(vim.trim(result))
+		root = normalize(vim.trim(result))
+	else
+		root = normalize(path)
 	end
-	return normalize(path)
+	repo_root_cache[path] = root
+	return root
+end
+
+function M.clear_cache()
+	repo_root_cache = {}
 end
 
 function M.relative(root, path)

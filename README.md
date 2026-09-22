@@ -235,6 +235,7 @@ can ignore the path manually.
 | `:QuickfixReviewHide` / `:QuickfixReviewShow` | Toggle source marks |
 | `:QuickfixReviewHover` | Show a qf-row note or a source note containing the cursor |
 | `:QuickfixReviewHoverAll` | Toggle persistent note overlays at visible source-range endpoints |
+| `:QuickfixReviewHoverToggle` | Toggle the automatic source/qf note hover |
 | `:QuickfixReviewQuit` | Save and close the note editor (buffer-local) |
 | `:QuickfixReviewNext` / `:QuickfixReviewPrev` | Pick the next/previous note |
 | `:QuickfixReviewSend[!]` | Send without agent notes; `!` includes them |
@@ -313,7 +314,7 @@ Defaults:
 | `nerd_font` | `true` | Use Nerd Font pencil and robot glyphs; set `false` for portable fallbacks |
 | `inline` | `true` | Show source note marks |
 | `glyph` | Nerd Font pencil or `✎` | Override the source note glyph |
-| `float` | `{ enabled = true, delay = 500, permanent = false }` | Source note hover |
+| `float` | `{ enabled = true, delay = 500, permanent = false }` | Source note hover: `delay` is the idle time in ms before it appears, `permanent = true` forces `delay = 0`. The hover is placed at the end of the text on the cursor's line. `:QuickfixReviewHoverToggle` switches the automatic hover at runtime |
 | `quickfix.prefill` | `true` | Start new qf notes with producer text |
 | `quickfix.inline` | `true` | Show marks in qf buffers |
 | `quickfix.agent_label` | `{ enabled = true }` | Nerd Font robot or `AGENT` fallback; `text` overrides it |

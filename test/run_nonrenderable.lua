@@ -54,8 +54,9 @@ for _, winid in ipairs(floats()) do
 	end
 end
 assert(panel)
+-- panel content is padded with one space per side, like the hover
 assert(vim.deep_equal(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(panel), 0, -1, false), {
-	"README.md:2", "first note", "", "README.md:4 (old)", "second note",
+	" README.md:2", " first note", " ", " README.md:4 (old)", " second note",
 }))
 assert(not marks.hover_all(buf))
 assert(#floats() == 1)
