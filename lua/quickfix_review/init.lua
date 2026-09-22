@@ -1071,10 +1071,17 @@ function M.setup(opts)
 	vim.api.nvim_create_autocmd("CursorMoved", {
 		group = group,
 		callback = function(e)
-			marks.refresh_rail(e.buf)
+			-- Nothing here may paint unconditionally. The rail carries notes, not
+			-- cursor position (it is refreshed by BufEnter/BufWinEnter and by the
+			-- WinScrolled/WinResized handler), and the hover is driven by payload
+			-- identity, not by movement.
+			marks.hover_follow()
 			hover_tick = hover_tick + 1
 			local tick = hover_tick
 			local delay = vim.bo[e.buf].buftype == "quickfix" and marks.quickfix_float_delay() or marks.float_delay()
+			-- Deferred so it lands once the cursor rests. It must stay a no-op unless
+			-- the notes under the cursor changed: this update happens on an idle
+			-- screen, and an idle repaint is exactly what reads as a flicker.
 			if delay then
 				vim.defer_fn(function()
 					if tick == hover_tick and vim.api.nvim_get_current_buf() == e.buf then

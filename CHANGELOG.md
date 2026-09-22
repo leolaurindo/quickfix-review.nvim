@@ -2,6 +2,16 @@
 
 All notable changes to Quickfix Review are documented here.
 
+## [Unreleased]
+
+### Fixed
+
+- Stop the review-note hover from flickering: reuse the existing floating window and
+  buffer instead of closing and reopening it on every cursor movement, and leave the
+  screen untouched when the notes under the cursor did not change.
+- Close the hover synchronously when the cursor leaves the line it belongs to, and
+  stop re-rendering rails on every `CursorMoved` and marks on every `WinScrolled`.
+
 ## [0.3.0] - 2026-09-18
 
 ### Added
