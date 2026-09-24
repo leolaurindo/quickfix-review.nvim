@@ -315,7 +315,10 @@ local function qf_entry_is_owned(entry)
 	return entry.kind == "quickfix"
 		and type(entry.list.context) == "table"
 		and type(entry.list.context.quickfix_review) == "table"
-		and entry.list.context.quickfix_review.role == "notes"
+		and (
+			entry.list.context.quickfix_review.role == "notes"
+			or entry.list.context.quickfix_review.role == "file_notes"
+		)
 end
 
 
@@ -628,10 +631,47 @@ function M.open_list()
 			lists.replace(target, items, owned.idx, owned.changedtick)
 		end
 	end
-	local ok, err = lists.open_owned(scope_id())
+	local ok, err = lists.open_owned(scope_id(), config.get().notes_list)
 	if not ok then
 		notify(err, vim.log.levels.INFO)
 	end
+	return ok, err
+end
+
+function M.open_file_notes()
+	refresh_scope()
+	local name = vim.api.nvim_buf_get_name(0)
+	if name == "" then
+		notify("current buffer has no file", vim.log.levels.INFO)
+		return false
+	end
+	local current_file = vim.fs.normalize(vim.fn.fnamemodify(name, ":p"))
+	local owned = lists.find_owned(scope_id())
+	local items = {}
+	for _, item in ipairs(owned and owned.items or {}) do
+		local note = annotations.get(item)
+		if note and location.absolute(note.location) == current_file then
+			local copy = vim.deepcopy(item)
+			copy.text = flatten(note.text)
+			items[#items + 1] = copy
+		end
+	end
+	if #items == 0 then
+		notify("no Quickfix Review notes for this file", vim.log.levels.INFO)
+		return false
+	end
+	vim.fn.setqflist({}, " ", {
+		nr = "$",
+		title = "Quickfix Review: " .. vim.fn.fnamemodify(current_file, ":."),
+		context = { quickfix_review = { version = 1, role = "file_notes", scope_id = scope_id(), path = current_file } },
+		items = items,
+	})
+	local current = vim.fn.getqflist({ id = 0 })
+	local ok, err = actions.open({ kind = "quickfix", id = current.id }, config.get().notes_list)
+	if not ok then
+		notify(err, vim.log.levels.INFO)
+	end
+	return ok, err
 end
 
 function M.pick(opts)
@@ -1036,6 +1076,7 @@ local function install_commands()
 	command("QuickfixReviewEdit", M.edit, { desc = "Edit a Quickfix Review annotation" })
 	command("QuickfixReviewDelete", M.delete, { desc = "Delete a Quickfix Review annotation" })
 	command("QuickfixReviewList", M.open_list, { desc = "Open the owned QuickfixReview list" })
+	command("QuickfixReviewListFile", M.open_file_notes, { desc = "Open notes for the current file" })
 	command("QuickfixReviewPick", function()
 		M.pick({ source = "owned", scope_id = scope_id() })
 	end, { desc = "Pick a QuickfixReview annotation" })

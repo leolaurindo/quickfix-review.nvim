@@ -136,12 +136,12 @@ function M.set_owned(value, target, items)
 	return ok, err
 end
 
-function M.open_owned(scope_id)
+function M.open_owned(scope_id, opts)
 	local value, target = M.find_owned(scope_id)
 	if not value then
 		return nil, "no Quickfix Review list"
 	end
-	return actions.open(target)
+	return actions.open(target, opts)
 end
 
 function M.clear(target)

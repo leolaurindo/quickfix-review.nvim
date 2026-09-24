@@ -9,6 +9,7 @@ M.defaults = {
 	template = "plain",
 	templates = {},
 	quickfix_title = "Quickfix Review",
+	notes_list = { vertical = false, width = 40, wrap = true, linebreak = true, breakindent = true },
 	persist_review_list = true,
 	scope_policy = "branch",
 	nerd_font = true,

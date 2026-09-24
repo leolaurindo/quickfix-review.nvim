@@ -51,7 +51,19 @@ Add Persist for automatic note-list persistence and Diffs for diff metadata.
 
 SETUP                                                          *quickfix-review-setup*
 
-  require("quickfix_review").setup({ send = "clipboard", nerd_font = true })
+  require("quickfix_review").setup({
+    send = "clipboard",
+    nerd_font = true,
+    notes_list = {
+      vertical = false, width = 40, wrap = true,
+      linebreak = true, breakindent = true,
+    },
+  })
+
+The notes_list options control vertical opening, width, and native wrap,
+linebreak, and breakindent for the read-only notes quickfix list. Use
+|QuickfixReviewListFile| from a source buffer for a filtered native view of that
+file's notes; the canonical owned list is unchanged.
 
 Regular export and send commands use template="plain" by default. Built-ins are
 plain, check these notes, broader review, question, and implement. Configure a
@@ -112,6 +124,8 @@ COMMANDS                                                       *quickfix-review-
 :QuickfixReviewDelete  Delete a note.
                                                           *QuickfixReviewList*
 :QuickfixReviewList  Open the owned notes list.
+                                                    *QuickfixReviewListFile*
+:QuickfixReviewListFile  Open notes for the current source file.
                                                           *QuickfixReviewPick*
 :QuickfixReviewPick  Pick an owned note.
                                                    *QuickfixReviewPickCurrent*
