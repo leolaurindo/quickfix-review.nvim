@@ -216,6 +216,11 @@ assert(not resolver.location(invalid_buf))
 
 local invalid_payload, invalid_payload_err = notes.import_findings({ version = 2, notes = { invalid = true } })
 assert(not invalid_payload and invalid_payload_err:find("notes array", 1, true))
+local legacy_payload, legacy_payload_err = require("quickfix_review.import").validate({
+	version = 1,
+	findings = { { path = "README.md", text = "Legacy payload" } },
+})
+assert(not legacy_payload and legacy_payload_err:find("version 2 and a notes array", 1, true))
 
 local agent_payload = {
 	version = 2,
@@ -277,9 +282,9 @@ for _, record in ipairs(user_records) do
 end
 
 local updated = assert(notes.import_findings({
-	version = 1,
+	version = 2,
 	origin = "agent",
-	findings = {
+	notes = {
 		{ id = "agent-001", path = "README.md", line = 13, text = "The updated review concern." },
 	},
 }))
@@ -296,8 +301,8 @@ end
 
 local import_path = vim.fn.tempname()
 assert(vim.fn.writefile({ vim.json.encode({
-	version = 1,
-	findings = { { id = "agent-003", path = "README.md", line = 14, text = "Imported through the command." } },
+	version = 2,
+	notes = { { id = "agent-003", path = "README.md", line = 14, text = "Imported through the command." } },
 }) }, import_path) == 0)
 vim.api.nvim_cmd({ cmd = "QuickfixReviewImport", args = { import_path } }, {})
 vim.fn.delete(import_path)
@@ -313,8 +318,8 @@ assert(command_note)
 assert(command_note.metadata.origin == "agent")
 
 local partially_imported = assert(notes.import_findings({
-	version = 1,
-	findings = {
+	version = 2,
+	notes = {
 		{ id = "outside", path = "../outside.lua", line = 1, text = "must be rejected" },
 		{ id = "agent-004", path = "docs/integrations.md", line = 1, text = "The valid finding remains importable." },
 	},

@@ -29,6 +29,43 @@ local function read_payload(source)
 	return decoded
 end
 
+function M.read_payload(source)
+	return read_payload(source)
+end
+
+function M.validate(payload)
+	local entries
+	if type(payload) == "table" and payload.version == 2 and vim.islist(payload.notes) then
+		entries = payload.notes
+	else
+		return nil, "notes payload must contain version 2 and a notes array"
+	end
+	if payload.branch ~= nil and (type(payload.branch) ~= "string" or payload.branch == "") then
+		return nil, "notes payload branch must be a non-empty string"
+	end
+	for index, entry in ipairs(entries) do
+		if type(entry) ~= "table" then
+			return nil, ("note %d must be an object"):format(index)
+		end
+		local entry_location = entry.location
+		if entry_location ~= nil and type(entry_location) ~= "table" then
+			return nil, ("note %d location must be an object"):format(index)
+		end
+		local path = type(entry_location) == "table" and (entry_location.path or entry_location.file) or nil
+		path = path or entry.path or entry.file
+		if type(path) ~= "string" or path == "" then
+			return nil, ("note %d must contain a path"):format(index)
+		end
+		if type(entry.text) ~= "string" or vim.trim(entry.text) == "" then
+			return nil, ("note %d must contain non-empty text"):format(index)
+		end
+		if entry.metadata ~= nil and type(entry.metadata) ~= "table" then
+			return nil, ("note %d metadata must be an object"):format(index)
+		end
+	end
+	return entries
+end
+
 local function inside_root(root, path)
 	if path == root then
 		return true
@@ -123,13 +160,9 @@ local function metadata(finding, opts, payload)
 end
 
 local function prepare(payload, opts)
-	local entries
-	if type(payload) == "table" and payload.version == 1 and vim.islist(payload.findings) then
-		entries = payload.findings
-	elseif type(payload) == "table" and payload.version == 2 and vim.islist(payload.notes) then
-		entries = payload.notes
-	else
-		return nil, "notes payload must contain version 2 and a notes array (or legacy version 1 findings)"
+	local entries, validation_err = M.validate(payload)
+	if not entries then
+		return nil, validation_err
 	end
 	local encoded, encode_err = pcall(vim.json.encode, payload)
 	if not encoded then

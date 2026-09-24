@@ -1004,18 +1004,49 @@ local function finish_import(result)
 	return result
 end
 
+local function check_payload_branch(payload, bypass)
+	local entries, schema_err = importer.validate(payload)
+	if not entries then
+		return nil, schema_err
+	end
+	if payload.branch and not bypass then
+		local active = scope.branch(current_scope.root)
+		if payload.branch ~= active then
+			return nil, ("agent response branch %q conflicts with active branch %q"):format(
+				payload.branch,
+				active or "(detached)"
+			)
+		end
+	end
+	return true
+end
+
 function M.import_findings(source, opts)
 	refresh_scope()
 	if source == nil or source == "" then
 		local response = config.get().agent.response
 		source = vim.fs.joinpath(current_scope.root, response.path)
 	end
-	opts = vim.tbl_extend("force", {}, opts or {}, {
-		root = current_scope and current_scope.root,
-		scope_id = scope_id(),
-		title = config.get().quickfix_title,
-	})
-	local result, err = importer.run(source, opts)
+	opts = vim.tbl_extend("force", {}, opts or {})
+	local payload, read_err = importer.read_payload(source)
+	if payload == nil then
+		notify("import failed: " .. tostring(read_err), vim.log.levels.ERROR)
+		return nil, read_err
+	end
+	local branch_ok, branch_err = check_payload_branch(payload, opts.bypass_branch)
+	if not branch_ok then
+		if not opts.defer_branch_conflict then
+			if not opts.bypass_branch and payload.branch then
+				branch_err = branch_err .. "; use :QuickfixReviewImport! <file> to bypass the branch guard"
+			end
+			notify("import failed: " .. tostring(branch_err), vim.log.levels.ERROR)
+		end
+		return nil, branch_err, opts.defer_branch_conflict
+	end
+	opts.root = current_scope.root
+	opts.scope_id = scope_id()
+	opts.title = config.get().quickfix_title
+	local result, err = importer.run(payload, opts)
 	if not result then
 		notify("import failed: " .. tostring(err), vim.log.levels.ERROR)
 		return nil, err
@@ -1031,22 +1062,36 @@ function M.reload_agent_response()
 	return result, err
 end
 
-configure_agent = function()
+configure_agent = function(force)
 	agent_file.stop()
 	local agent = config.get().agent
 	local response = agent and agent.response
-	if not current_scope or not response or not response.watch then
+	if not current_scope or not response or (not response.watch and not force) then
 		return
 	end
 	local handle, err = agent_file.setup({
+		watch = response.watch,
 		root = current_scope.root,
 		path = response.path,
 		protect_git = agent.protect_git,
-		import = function(payload, id_namespace)
+		eligible = function(payload)
 			if type(payload) ~= "table" or payload.origin ~= "agent" then
 				return nil, "automatic response origin must be agent"
 			end
-			return M.import_findings(payload, { origin = "agent", id_namespace = id_namespace })
+			local ok, err = check_payload_branch(payload, false)
+			if not ok then
+				local is_branch_mismatch = payload.branch ~= nil
+					and tostring(err):find("conflicts with active branch", 1, true) ~= nil
+				return nil, err, is_branch_mismatch or false
+			end
+			return true
+		end,
+		import = function(payload, id_namespace)
+			return M.import_findings(payload, {
+				origin = "agent",
+				id_namespace = id_namespace,
+				defer_branch_conflict = true,
+			})
 		end,
 		done = function() end,
 		failed = function(file_err)
@@ -1058,6 +1103,17 @@ configure_agent = function()
 	})
 	if not handle then
 		notify("agent response watcher failed: " .. tostring(err), vim.log.levels.ERROR)
+	end
+end
+
+local function rescan_agent_responses()
+	local response = config.get().agent and config.get().agent.response
+	if not response or not response.watch then
+		return
+	end
+	local result, err = agent_file.import_ready()
+	if not result and err ~= "no agent response files found" then
+		notify("agent response import failed: " .. tostring(err), vim.log.levels.ERROR)
 	end
 end
 
@@ -1160,8 +1216,25 @@ local function install_commands()
 		M.load_list(o.args)
 	end, { nargs = 1, desc = "Load a named native list" })
 	command("QuickfixReviewImport", function(o)
-		M.import_findings(o.args, { origin = "agent" })
-	end, { nargs = "?", complete = "file", desc = "Import agent review findings from JSON" })
+		if o.args ~= "" then
+			M.import_findings(o.args, { origin = "agent", bypass_branch = o.bang })
+			return
+		end
+		refresh_scope()
+		local response = config.get().agent and config.get().agent.response
+		if response and not response.watch then
+			configure_agent(true)
+		end
+		local result, err = agent_file.import_ready()
+		if not result and err ~= "no agent response files found" then
+			notify("agent response batch import failed: " .. tostring(err), vim.log.levels.ERROR)
+		end
+	end, {
+		nargs = "?",
+		bang = true,
+		complete = "file",
+		desc = "Import ready responses (! with a file bypasses the branch guard)",
+	})
 	command("QuickfixReviewHide", marks.hide, { desc = "Hide Quickfix Review marks" })
 	command("QuickfixReviewShow", marks.show, { desc = "Show Quickfix Review marks" })
 	command("QuickfixReviewHover", function()
@@ -1261,6 +1334,7 @@ function M.setup(opts)
 			-- had changed - a repaint of marked lines with no cursor movement and no popup
 			-- involved.
 			refresh_scope(true)
+			rescan_agent_responses()
 		end,
 	})
 	vim.api.nvim_create_autocmd("User", {
@@ -1269,6 +1343,7 @@ function M.setup(opts)
 		callback = function()
 			refresh_scope(true)
 			marks.refresh()
+			rescan_agent_responses()
 		end,
 	})
 	vim.api.nvim_create_autocmd("User", {

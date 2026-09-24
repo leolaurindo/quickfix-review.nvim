@@ -113,11 +113,8 @@ local function payloads(ready_only)
 end
 
 local function read_once(path, ready)
-	if ready and vim.fn.delete(ready) ~= 0 then
-		if vim.fn.filereadable(ready) == 0 then
-			return nil, nil, true
-		end
-		return nil, "could not claim ready agent response: " .. ready
+	if ready and vim.fn.filereadable(ready) ~= 1 then
+		return nil, nil, true
 	end
 	local fd = io.open(path, "rb")
 	if not fd then
@@ -129,12 +126,21 @@ local function read_once(path, ready)
 	if not ok then
 		return nil, "invalid findings JSON: " .. tostring(payload)
 	end
+	if state.eligible then
+		local eligible, eligibility_err, skipped = state.eligible(payload)
+		if not eligible then
+			return nil, eligibility_err, skipped
+		end
+	end
 	local result, err = state.import(payload, "agent:" .. vim.fn.sha256(contents))
 	if not result then
 		return nil, err
 	end
 	if vim.fn.delete(path) ~= 0 then
 		return nil, "response imported but could not be consumed: " .. path
+	end
+	if ready and vim.fn.delete(ready) ~= 0 and vim.fn.filereadable(ready) == 1 then
+		return nil, "response imported but could not consume ready marker: " .. ready
 	end
 	return result
 end
@@ -146,7 +152,10 @@ local function drain(ready_only, report)
 	local found, last, first_err = false, nil, nil
 	for _, path in ipairs(payloads(ready_only)) do
 		found = true
-		local ready = ready_only and path .. ".ready" or nil
+		local ready = path .. ".ready"
+		if not ready_only and vim.fn.filereadable(ready) ~= 1 then
+			ready = nil
+		end
 		local result, err, skipped = read_once(path, ready)
 		if result then
 			last = result
@@ -164,7 +173,11 @@ local function drain(ready_only, report)
 	if not found then
 		return nil, "no agent response files found"
 	end
-	return last
+	return last or { added = 0, updated = 0, unchanged = 0, skipped = 0, deferred = true }
+end
+
+function M.import_ready()
+	return drain(true, false)
 end
 
 function M.reload()
@@ -265,11 +278,15 @@ function M.setup(opts)
 		dir = dir,
 		basename = vim.fs.basename(absolute),
 		protect_git = opts.protect_git,
+		eligible = opts.eligible,
 		import = assert(opts.import),
 		done = opts.done or function() end,
 		failed = opts.failed or function() end,
 		warn = opts.warn or function() end,
 	}
+	if opts.watch == false then
+		return { path = absolute }
+	end
 	local ok, err = await_directory()
 	if not ok then
 		M.stop()

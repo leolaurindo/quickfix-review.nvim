@@ -164,9 +164,9 @@ end, 20))
 assert(vim.fn.filereadable(response_path) == 0)
 assert(vim.fn.filereadable(ready_path) == 0)
 local user_payload = {
-	version = 1,
+	version = 2,
 	origin = "user",
-	findings = { { id = "user-one", path = "README.md", line = 1, text = "User response" } },
+	notes = { { id = "user-one", path = "README.md", line = 1, text = "User response" } },
 }
 local user_result = assert(notes.import_findings(user_payload))
 assert(user_result.added == 1)
@@ -190,14 +190,13 @@ assert(status.code == 0 and not status.stdout:find(".quickfix-review", 1, true))
 
 assert(vim.fn.writefile({ "{" }, response_path) == 0)
 assert(vim.fn.writefile({}, ready_path) == 0)
-assert(vim.wait(2000, function()
-	return vim.fn.filereadable(ready_path) == 0
-end, 20))
-assert(vim.fn.filereadable(response_path) == 1)
+vim.wait(200)
+assert(vim.fn.filereadable(ready_path) == 1 and vim.fn.filereadable(response_path) == 1)
 local invalid, invalid_err = notes.reload_agent_response()
 assert(not invalid and invalid_err:find("invalid findings JSON", 1, true))
-assert(vim.fn.filereadable(response_path) == 1)
+assert(vim.fn.filereadable(response_path) == 1 and vim.fn.filereadable(ready_path) == 1)
 assert(vim.fn.delete(response_path) == 0)
+assert(vim.fn.delete(ready_path) == 0)
 local agent_file = require("quickfix_review.agent.file")
 agent_file.stop()
 notes.setup({
@@ -209,11 +208,11 @@ notes.setup({
 -- let that pending work run before the watcher exercised below is installed.
 vim.wait(100)
 assert(vim.fn.writefile({ vim.json.encode({
-	version = 1,
+	version = 2,
 	origin = "agent",
-	findings = { { id = "manual-default", path = "README.md", text = "Imported from the default path" } },
+	notes = { { id = "manual-default", path = "README.md", text = "Imported from the default path" } },
 }) }, response_path) == 0)
-vim.cmd("QuickfixReviewImport")
+vim.cmd("QuickfixReviewImport " .. vim.fn.fnameescape(response_path))
 assert(vim.fn.filereadable(response_path) == 1)
 owned = assert(lists.find_owned(require("quickfix_review.scope").id(notes.scope())))
 local found_manual_default = false
@@ -249,14 +248,97 @@ assert(vim.fn.filereadable(first_path) == 0 and vim.fn.filereadable(first_path .
 assert(vim.fn.filereadable(second_path) == 0 and vim.fn.filereadable(second_path .. ".ready") == 0)
 agent_file.stop()
 
+local scope_module = require("quickfix_review.scope")
+local active_branch = assert(scope_module.branch(root))
+local deferred_branch = "qfr-review-deferred"
+local function response_payload(id, branch)
+	return {
+		version = 2,
+		origin = "agent",
+		branch = branch,
+		notes = { { id = id, path = "agent-import-test.md", line = 1, text = id } },
+	}
+end
+local function write_ready(name, payload)
+	local path = vim.fs.joinpath(response_dir, name .. "-agent-response.json")
+	assert(vim.fn.writefile({ vim.json.encode(payload) }, path) == 0)
+	assert(vim.fn.writefile({}, path .. ".ready") == 0)
+	return path
+end
+local function has_note(id)
+	local list = lists.find_owned(scope_module.id(notes.scope()))
+	for _, list_item in ipairs(list and list.items or {}) do
+		local note = annotations.get(list_item)
+		if note and (note.id == id or note.text == id) then
+			return true
+		end
+	end
+	return false
+end
+
+notes.setup({ persist_review_list = false, scope_policy = "repository", agent = { response = { watch = true } } })
+vim.wait(100)
+local matched_ready = write_ready("matched", response_payload("branch-match", active_branch))
+local deferred_ready = write_ready("deferred", response_payload("branch-deferred", deferred_branch))
+assert(vim.wait(2000, function()
+	return vim.fn.filereadable(matched_ready) == 0
+end, 20))
+assert(has_note("branch-match"))
+assert(vim.fn.filereadable(deferred_ready) == 1 and vim.fn.filereadable(deferred_ready .. ".ready") == 1)
+assert(vim.system({ "git", "-C", root, "symbolic-ref", "HEAD", "refs/heads/" .. deferred_branch }):wait().code == 0)
+vim.cmd("doautocmd FocusGained")
+assert(vim.wait(2000, function()
+	return vim.fn.filereadable(deferred_ready) == 0
+end, 20))
+assert(has_note("branch-deferred"))
+assert(scope_module.branch(root) == deferred_branch)
+
+notes.setup({ persist_review_list = false, scope_policy = "repository", agent = { response = { watch = false } } })
+vim.wait(100)
+local no_branch = write_ready("no-branch", response_payload("batch-no-branch", nil))
+local matching = write_ready("batch-match", response_payload("batch-match", deferred_branch))
+local mismatching = write_ready("batch-mismatch", response_payload("batch-mismatch", active_branch))
+local unsupported = write_ready("unsupported", { version = 99, origin = "agent", notes = {} })
+local invalid_schema = write_ready("invalid-schema", { version = 2, origin = "agent", branch = 42, notes = {} })
+local batch_ok = pcall(vim.cmd, "QuickfixReviewImport")
+assert(not batch_ok)
+assert(vim.fn.filereadable(no_branch) == 0 and vim.fn.filereadable(no_branch .. ".ready") == 0)
+assert(vim.fn.filereadable(matching) == 0 and vim.fn.filereadable(matching .. ".ready") == 0)
+assert(has_note("batch-no-branch") and has_note("batch-match"))
+for _, path in ipairs({ mismatching, unsupported, invalid_schema }) do
+	assert(vim.fn.filereadable(path) == 1 and vim.fn.filereadable(path .. ".ready") == 1)
+end
+
+local explicit_mismatch = vim.fs.joinpath(response_dir, "explicit-mismatch.json")
+local explicit_payload = vim.json.encode(response_payload("explicit-override", active_branch))
+assert(vim.fn.writefile({ explicit_payload }, explicit_mismatch) == 0)
+local original_notify, import_message = vim.notify, nil
+vim.notify = function(message)
+	import_message = message
+end
+vim.cmd("QuickfixReviewImport " .. vim.fn.fnameescape(explicit_mismatch))
+vim.notify = original_notify
+assert(import_message:find("conflicts with active branch", 1, true))
+assert(import_message:find(":QuickfixReviewImport! <file>", 1, true))
+assert(not has_note("explicit-override"))
+vim.cmd("QuickfixReviewImport! " .. vim.fn.fnameescape(explicit_mismatch))
+assert(has_note("explicit-override"))
+local explicit_unsupported = vim.fs.joinpath(response_dir, "explicit-unsupported.json")
+assert(vim.fn.writefile({ vim.json.encode({ version = 99, notes = {} }) }, explicit_unsupported) == 0)
+local unsupported_ok = pcall(vim.cmd, "QuickfixReviewImport! " .. vim.fn.fnameescape(explicit_unsupported))
+assert(not unsupported_ok)
+assert(not has_note("explicit-unsupported"))
+assert(vim.fn.filereadable(explicit_unsupported) == 1)
+assert(vim.system({ "git", "-C", root, "symbolic-ref", "HEAD", "refs/heads/" .. active_branch }):wait().code == 0)
+
 local outside = vim.fn.tempname()
 vim.fn.mkdir(outside, "p")
 assert(vim.fn.writefile({ "outside" }, vim.fs.joinpath(outside, "outside.lua")) == 0)
 local link = vim.fs.joinpath(root, "outside-link")
 assert(vim.uv.fs_symlink(outside, link))
 local escaped = assert(notes.import_findings({
-	version = 1,
-	findings = { { id = "escaped", path = "outside-link/outside.lua", text = "must be rejected" } },
+	version = 2,
+	notes = { { id = "escaped", path = "outside-link/outside.lua", text = "must be rejected" } },
 }))
 assert(escaped.skipped == 1 and escaped.errors[1]:find("outside", 1, true))
 vim.fn.delete(link)

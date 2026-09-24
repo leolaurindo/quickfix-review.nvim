@@ -13,7 +13,9 @@ for a Quickfix Review response is also an explicit request.
 
 ## Workflow
 
-1. Identify the repository root and comparison range.
+1. Identify the repository root, comparison range, and active Git branch. Include
+   that branch in the response payload so a delayed response cannot be imported
+   into a different branch's review scope.
 2. Inspect the diff and relevant surrounding code.
 3. Trace changed data through callers, error paths, persistence, and tests.
 4. Report only actionable issues introduced or exposed by the changeset.
@@ -38,11 +40,22 @@ When instructed to use the automatic response mailbox:
    payload for the current batch; do not split one answer across multiple payloads.
 2. Create `.quickfix-review` if needed. The receiving plugin does not create the
    mailbox directory; the first agent writing a response owns its creation.
-3. Use `.quickfix-review/agent-response.json` when it does not exist. If it
-   exists, do not modify it: choose an unused filename by adding a unique prefix
-   before `agent-response.json`.
-4. Write the complete payload first. After that write finishes, create an empty
-   file at `<payload-path>.ready`. Do not create the marker before the payload is
+3. Use a collision-resistant, shell-generated prefix (UTC timestamp with
+   sub-second precision plus the shell PID) before `agent-response.json`, and
+   check both candidate paths before use. For example:
+
+   ```sh
+   prefix="$(date -u +%Y%m%dT%H%M%S.%N)-$$"
+   path=".quickfix-review/${prefix}-agent-response.json"
+   while [ -e "$path" ] || [ -e "$path.ready" ]; do
+     prefix="${prefix}-x"
+     path=".quickfix-review/${prefix}-agent-response.json"
+   done
+   ```
+
+4. Write one complete payload to the selected path without appending or
+   overwriting an existing file. After the write finishes, create an empty file
+   at `<payload-path>.ready`. Do not create the marker before the payload is
    complete.
 5. Treat both files as ephemeral, disposable mailbox messages—not persistent
    agent state. Never append to an earlier response or carry its findings into
@@ -71,6 +84,7 @@ between 0 and 1 and order findings by severity, then location.
 {
   "version": 2,
   "origin": "agent",
+  "branch": "current-branch-name",
   "notes": [
     {
       "path": "relative/path.lua",
@@ -88,9 +102,11 @@ between 0 and 1 and order findings by severity, then location.
 ```
 
 Required fields are top-level `version`, `origin`, and `notes`, plus
-`path` and `text` for each note. `line` and `line_end` are optional for file
-notes. Set `origin` to `agent`, use repository-relative paths and positive
-1-based lines. Omit IDs; Neovim assigns internal note identity. Version 1
-`findings` payloads remain accepted for compatibility.
+`path` and `text` for each note. Include top-level `branch` with the exact active
+branch name as an import guard; it is optional for older/manual payloads. `line`
+and `line_end` are optional for file notes. Set `origin` to `agent`, use
+repository-relative paths and positive 1-based line numbers. Omit IDs; Neovim
+assigns internal note identity. Emit only version 2 payloads with a top-level
+`notes` array; version 1 `findings` payloads are rejected.
 Do not include absolute paths outside the repository, prose outside the JSON, or
 executable content.

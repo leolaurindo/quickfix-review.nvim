@@ -169,8 +169,15 @@ COMMANDS                                                       *quickfix-review-
                                                      *QuickfixReviewLoadList*
 :QuickfixReviewLoadList {name}  Load a named native list.
                                                         *QuickfixReviewImport*
-:QuickfixReviewImport [{file}]  Import findings from JSON. Without a file, use
-                                .quickfix-review/agent-response.json.
+:QuickfixReviewImport[!] [{file}] Import ready responses in a batch, or one
+                                explicit file. ! with a file bypasses its branch
+                                guard, never schema validation.
+
+No-argument import scans the configured mailbox for matching ready payloads.
+Payloads may include a top-level branch guard; mismatches are silently retained
+and retried after a branch change. Payloads without a branch import into the
+active scope. Files and markers are consumed only after successful import.
+Payloads must use version 2 with a top-level notes array; version 1 findings payloads are rejected.
                                                           *QuickfixReviewQuit*
 :QuickfixReviewQuit  Save and close the note editor (buffer-local).
                                                           *QuickfixReviewHide*

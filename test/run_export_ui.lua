@@ -27,6 +27,10 @@ for _, case in ipairs({
 	{ kind = "location", prefill = false },
 }) do
 	local kind = case.kind
+	local current_info = vim.fn.getwininfo(vim.api.nvim_get_current_win())[1]
+	if current_info and current_info.quickfix == 1 then
+		vim.cmd(current_info.loclist == 1 and "lclose" or "cclose")
+	end
 	review.setup({
 		persist_review_list = false,
 		agent = { response = { watch = false } },
