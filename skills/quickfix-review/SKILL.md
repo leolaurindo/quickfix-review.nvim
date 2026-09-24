@@ -17,25 +17,25 @@ for a Quickfix Review response is also an explicit request.
 2. Inspect the diff and relevant surrounding code.
 3. Trace changed data through callers, error paths, persistence, and tests.
 4. Report only actionable issues introduced or exposed by the changeset.
-5. When Sidekick requests an automatic response, write one complete payload and its ready marker as described below. Otherwise, prefer `.quickfix-review/agent-response.json` when it is unused, or choose another user-visible JSON path.
-6. When the automatic response mailbox is not in use, ask the user to run `:QuickfixReviewImport` for the default path or `:QuickfixReviewImport <path>` for another path.
+5. If there are findings and Sidekick requests an automatic response, write one complete payload and its ready marker as described below. Otherwise, save the non-empty payload to `.quickfix-review/agent-response.json` when unused, or choose another user-visible JSON path.
+6. When the automatic response mailbox is not in use, ask the user to run `:QuickfixReviewImport` for the default path or `:QuickfixReviewImport <path>` for another path. Do not ask for import when there are no findings.
 
 Do not modify source code unless separately asked. Do not report style choices,
 pre-existing behavior, or unsupported speculation.
 
 ## Automatic responses
 
-The Sidekick message contains a section headed `Quickfix Review notes for this
-review:` and ending at `End of Quickfix Review notes.`. That delimited section is
-the user's review notes for this request. Review the notes in that section;
-conversation outside it is not part of the Quickfix Review payload. Different
+The Sidekick message includes the formatted review notes supplied by the user.
+Treat those notes as the review scope; do not assume the message has fixed
+Quickfix Review delimiters. Include any explicit question or implementation
+request in scope; modify source only when separately authorized. Different
 requests may cover different files or chunks; the response file is only the
 return channel, not a task database.
 
 When instructed to use the automatic response mailbox:
 
-1. Produce exactly one complete version 1 findings payload for the current
-   batch; do not split one answer across multiple payloads.
+1. For a non-empty result, produce exactly one complete version 2 notes
+   payload for the current batch; do not split one answer across multiple payloads.
 2. Create `.quickfix-review` if needed. The receiving plugin does not create the
    mailbox directory; the first agent writing a response owns its creation.
 3. Use `.quickfix-review/agent-response.json` when it does not exist. If it
@@ -56,8 +56,10 @@ When instructed to use the automatic response mailbox:
 8. Do not edit `.gitignore`, `.git/info/exclude`, or unrelated repository files
    to support the mailbox.
 
-An empty `findings` array is a valid complete response. Write JSON only, with no
-surrounding prose.
+When there are no actionable findings, do not write a payload or ready marker;
+report directly to the user that there are no findings. This avoids making an
+empty mailbox look like a failed response. For non-empty results, write JSON
+only, with no surrounding prose.
 
 ## Findings
 
@@ -67,9 +69,9 @@ between 0 and 1 and order findings by severity, then location.
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "origin": "agent",
-  "findings": [
+  "notes": [
     {
       "path": "relative/path.lua",
       "line": 10,
@@ -85,9 +87,10 @@ between 0 and 1 and order findings by severity, then location.
 }
 ```
 
-Required fields are top-level `version`, `origin`, and `findings`, plus
-`path` and `text` for each finding. `line` and `line_end` are optional for file
-findings. Set `origin` to `agent`, use repository-relative paths and positive
-1-based lines. Omit IDs; Neovim assigns internal note identity. An empty findings array is valid.
+Required fields are top-level `version`, `origin`, and `notes`, plus
+`path` and `text` for each note. `line` and `line_end` are optional for file
+notes. Set `origin` to `agent`, use repository-relative paths and positive
+1-based lines. Omit IDs; Neovim assigns internal note identity. Version 1
+`findings` payloads remain accepted for compatibility.
 Do not include absolute paths outside the repository, prose outside the JSON, or
 executable content.

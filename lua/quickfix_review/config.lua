@@ -6,6 +6,8 @@ M.defaults = {
 	warn_stale = true,
 	actions = { mappings = { qf = false } },
 	export = {},
+	template = "plain",
+	templates = {},
 	quickfix_title = "Quickfix Review",
 	persist_review_list = true,
 	scope_policy = "branch",

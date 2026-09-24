@@ -53,6 +53,13 @@ SETUP                                                          *quickfix-review-
 
   require("quickfix_review").setup({ send = "clipboard", nerd_font = true })
 
+Regular export and send commands use template="plain" by default. Built-ins are
+plain, check these notes, broader review, question, and implement. Configure a
+different default with template="question"; custom templates are named entries
+in templates and accept a prompt string or { prefix, suffix }. The
+|QuickfixReviewExportFromTemplate| and
+|QuickfixReviewSendAgentFromTemplate| commands choose a one-shot template.
+
 Neovim cannot detect the terminal font. Set nerd_font=false to use the portable
 pencil and AGENT fallbacks. Explicit glyph and quickfix.agent_label.text values
 override these defaults. Both note and agent indicators use QuickfixReviewMark.
@@ -66,12 +73,10 @@ Automatic agent findings are watched for by default. To opt out: >
     agent = { response = { watch = false } },
   })
 <
-Sidekick receives the selected review notes directly. The agent writes one
-complete .quickfix-review/agent-response.json payload, creating the mailbox
-directory first and using an unused prefixed variant if needed, then creates
-<payload-path>.ready. Enabling the watcher does not create repository files or
-modify Git metadata. Review imports and deletes both files after success; their
-disappearance confirms successful consumption.
+Ordinary Sidekick sends contain the formatted notes only; they do not require a
+prompt, findings JSON, or mailbox write. Request the Quickfix Review skill when
+you want findings returned as importable notes. Response generation and the
+mailbox workflow are optional.
 Agent notes use the robot glyph in source and native list rows; user notes use
 the pencil. Without Nerd Fonts they fall back to AGENT and a portable pencil.
 Range indicators and automatic source hover appear at both endpoints. Use
@@ -114,7 +119,11 @@ COMMANDS                                                       *quickfix-review-
                                                         *QuickfixReviewSearch*
 :QuickfixReviewSearch  Search the current list by path, entry text, or note text.
                                                         *QuickfixReviewExport*
-:QuickfixReviewExport[!]  Export without agent notes; ! includes them.
+:QuickfixReviewExport[!]  Export with the configured template; ! includes agents.
+                                            *QuickfixReviewExportFromTemplate*
+:QuickfixReviewExportFromTemplate[!]  Pick a one-shot template and export.
+                                   *QuickfixReviewSendAgentFromTemplate*
+:QuickfixReviewSendAgentFromTemplate[!]  Pick a one-shot template and send.
                                               *QuickfixReviewSendAgent*
 :QuickfixReviewSendAgent[!]  Send user notes; ! submits immediately.
                                       *QuickfixReviewSendAgentAndClear*
@@ -123,8 +132,8 @@ COMMANDS                                                       *quickfix-review-
 :QuickfixReviewReloadAgentResponse  Retry retained agent responses.
                                                    *QuickfixReviewExportUser*
 :QuickfixReviewExportUser  Export user-authored notes only.
-                                                  *QuickfixReviewExportAgent*
-:QuickfixReviewExportAgent  Export agent-authored notes only.
+                                             *QuickfixReviewExportAgentNotes*
+:QuickfixReviewExportAgentNotes  Export agent-authored notes only.
                                                     *QuickfixReviewExportList*
 :QuickfixReviewExportList  Export the current native list.
                                                *QuickfixReviewExportAndClear*

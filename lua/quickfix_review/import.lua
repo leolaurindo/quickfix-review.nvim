@@ -123,15 +123,20 @@ local function metadata(finding, opts, payload)
 end
 
 local function prepare(payload, opts)
-	if type(payload) ~= "table" or payload.version ~= 1 or not vim.islist(payload.findings) then
-		return nil, "findings payload must contain version 1 and a findings array"
+	local entries
+	if type(payload) == "table" and payload.version == 1 and vim.islist(payload.findings) then
+		entries = payload.findings
+	elseif type(payload) == "table" and payload.version == 2 and vim.islist(payload.notes) then
+		entries = payload.notes
+	else
+		return nil, "notes payload must contain version 2 and a notes array (or legacy version 1 findings)"
 	end
 	local encoded, encode_err = pcall(vim.json.encode, payload)
 	if not encoded then
-		return nil, "findings payload is not JSON-serializable: " .. tostring(encode_err)
+		return nil, "notes payload is not JSON-serializable: " .. tostring(encode_err)
 	end
 	local prepared, errors = {}, {}
-	for index, finding in ipairs(payload.findings) do
+	for index, finding in ipairs(entries) do
 		if type(finding) ~= "table" then
 			errors[#errors + 1] = ("finding %d: must be an object"):format(index)
 		else

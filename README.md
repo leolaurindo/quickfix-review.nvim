@@ -19,8 +19,8 @@ Quickfix Review works standalone or as part of the [quickfix-kit.nvim](https://g
 
 ![Two source-buffer notes are sent to an agent and two findings return to the Quickfix Review list](assets/agent-workflow.gif)
 
-Any coding agent can return location-aware findings by writing one complete
-version 0 payload to `.quickfix-review/agent-response.json`, then creating the
+Any coding agent can return location-aware notes by writing one complete
+version 2 payload to `.quickfix-review/agent-response.json`, then creating the
 matching `.ready` marker. Quickfix Review watches that mailbox and imports the
 completed response automatically. The shipped
 [quickfix-review skill](skills/quickfix-review/SKILL.md) defines the payload
@@ -127,22 +127,20 @@ Returned findings become regular Quickfix Review notes: they are visible at thei
 source locations, identifiable as agent-authored in native lists, and collected
 in the owned Quickfix Review list alongside your notes.
 
-A full review round trip works as follows:
+For an optional response round trip, explicitly ask Sidekick to use the
+[Quickfix Review skill](skills/quickfix-review/SKILL.md):
 
 1. Add notes from source buffers, quickfix/location-list entries, or diff rows.
 2. Send selected user-authored notes to Sidekick with
-   `:QuickfixReviewSendAgent`, optionally submitting the prompt immediately with
-   `!`.
-3. The agent reviews the changeset and writes versioned findings JSON to the
-   repository response mailbox.
+   `:QuickfixReviewSendAgent`, optionally submitting immediately with `!`.
+3. The skill asks the agent to return versioned notes JSON to the repository
+   response mailbox.
 4. Quickfix Review watches that mailbox and imports completed responses
    automatically. You can also import a response explicitly with
    `:QuickfixReviewImport [file]`.
-5. Review or edit the returned notes where they apply or in the central list,
-   then continue the conversation, export them, or clear them independently.
+5. Review or edit the returned notes where they apply or in the central list.
 
-The receive side also works without live integration: an agent can write the file
-and ask you to run the import command. See [Import](#import) for the JSON format.
+See [Import](#import) for the JSON format and mailbox lifecycle.
 
 Plugin managers install the skill with the plugin but do not register it with
 coding-agent clients. Install it using the mechanism supported by your client.
@@ -168,32 +166,15 @@ require("quickfix_review").setup({
 Without this configuration, exports use the default clipboard destination.
 See [Export](#export) for custom formats and destinations.
 
-The repository-scoped response mailbox is watched by default. To opt out:
-
-```lua
-require("quickfix_review").setup({
-  agent = { response = { watch = false } },
-})
-```
-
-Run `:QuickfixReviewSendAgent` to insert the selected user-authored review notes
-into Sidekick, or `:QuickfixReviewSendAgent!` to submit immediately for that
-invocation. Use `:QuickfixReviewSendAgentAndClear[!]` to clear all selected
-notes only after the send succeeds. The message places them between `Quickfix
-Review notes for this review:` and `End of Quickfix Review notes.` and tells the
-agent to write one complete findings payload to
-`.quickfix-review/agent-response.json`, or an unused prefixed variant when that
-path exists, then create a matching `.ready` file. The agent creates the mailbox
-directory on first use; enabling the watcher alone does not create repository
-files or modify Git metadata. Review imports and deletes both files after
-success. Their disappearance confirms successful consumption; it is not a
-failure and agents must not recreate them.
-
-Each send is an independent review batch. Agents must not accumulate old
-responses or recreate a consumed response merely because its files disappeared.
-The plugin makes a best-effort attempt to add the mailbox to repository-local
-`.git/info/exclude`. If that fails, watching continues with a warning so the user
-can ignore the path manually.
+Run `:QuickfixReviewSendAgent` to insert the selected user-authored notes into
+Sidekick, or `:QuickfixReviewSendAgent!` to submit immediately. Ordinary sends
+contain the formatted notes without a required prompt, findings JSON, or mailbox
+write. Use `:QuickfixReviewSendAgentAndClear[!]` to clear all selected notes only
+after a successful send. Response generation/import is optional; explicitly
+request the [Quickfix Review skill](skills/quickfix-review/SKILL.md) when you want
+findings returned as importable notes. The response watcher can be disabled with
+`agent.response.watch = false`; its mailbox lifecycle is documented in
+[Import](#import).
 
 ## Quick start
 
@@ -219,12 +200,14 @@ can ignore the path manually.
 | `:QuickfixReviewPick` | Pick an owned note |
 | `:QuickfixReviewPickCurrent` | Pick a note in the current list |
 | `:QuickfixReviewSearch` | Search the current list by path, entry text, or note text |
-| `:QuickfixReviewExport[!]` | Export without agent notes; `!` includes them |
-| `:QuickfixReviewSendAgent[!]` | Send user notes to Sidekick; `!` submits immediately |
+| `:QuickfixReviewExport[!]` | Export using the configured template; `!` includes agent notes |
+| `:QuickfixReviewExportFromTemplate[!]` | Choose a one-shot template and export; `!` includes agent notes |
+| `:QuickfixReviewSendAgent[!]` | Send user notes to Sidekick using the configured template; `!` submits immediately |
+| `:QuickfixReviewSendAgentFromTemplate[!]` | Choose a one-shot template and send to Sidekick; `!` submits immediately |
 | `:QuickfixReviewSendAgentAndClear[!]` | Send user notes, then clear all notes on success |
 | `:QuickfixReviewReloadAgentResponse` | Retry retained agent responses |
 | `:QuickfixReviewExportUser` | Export user-authored notes only |
-| `:QuickfixReviewExportAgent` | Export agent-authored notes only |
+| `:QuickfixReviewExportAgentNotes` | Export agent-authored notes only |
 | `:QuickfixReviewExportList` | Export the current native list |
 | `:QuickfixReviewExportAndClear[!]` | Export and clear matching notes; `!` includes agent notes |
 | `:QuickfixReviewClear` | Clear annotations or owned entries |
@@ -250,6 +233,24 @@ per-note overlays at visible endpoints; scrolling hides off-screen notes and
 reveals newly visible ones, while leaving the window disables the overlays.
 
 ### Export, send, and clear semantics
+
+Regular export and send commands use the configured `template` without opening a
+picker. The built-ins are `plain`, `check these notes`, `broader review`,
+`question`, and `implement`; `plain` adds no prompt text. The `...FromTemplate`
+commands open a one-shot selector and do not change the configured default.
+Custom entries in `templates` accept a prompt string or `{ prefix, suffix }`,
+using quickfix-export's framing API:
+
+```lua
+require("quickfix_review").setup({
+  template = "review carefully",
+  templates = {
+    ["review carefully"] = {
+      prefix = "Review each note carefully against the code.\n\n",
+    },
+  },
+})
+```
 
 From a quickfix/location-list window these commands target the current list;
 elsewhere they target the owned Quickfix Review list for the active scope.
@@ -308,6 +309,8 @@ Defaults:
 | `warn_stale` | `true` | Warn when a note's source changed |
 | `actions` | `{ mappings = { qf = false } }` | Actions setup forwarded by Review |
 | `export` | `{}` | Export setup forwarded by Review |
+| `template` | `"plain"` | Default export/send template |
+| `templates` | `{}` | Custom template framings keyed by name |
 | `quickfix_title` | `"Quickfix Review"` | Owned notes-list title |
 | `persist_review_list` | `true` | Watch the owned notes list when Persist is available |
 | `scope_policy` | `"branch"` | `branch`, `repository`, or `custom` note scope |
@@ -383,7 +386,7 @@ require("quickfix_review").export({ warn_stale = false })
 
 ## Import
 
-Import versioned agent findings into the owned notes quickfix list:
+Import versioned agent notes into the owned notes quickfix list:
 
 ```vim
 :QuickfixReviewImport
@@ -392,12 +395,13 @@ Import versioned agent findings into the owned notes quickfix list:
 
 The argument is optional and defaults to the configured repository response path,
 `.quickfix-review/agent-response.json`. The equivalent Lua API accepts the same
-optional source.
+optional source. New payloads use `version: 2` with a top-level `notes` array;
+legacy `version: 1` payloads with `findings` remain accepted.
 
-Each finding requires `text` and a repository-relative `path`; `line` and
-`line_end` are optional. Stable string IDs update existing findings; findings
-without IDs match by location. `severity`, `confidence`, `category`, `evidence`,
-and `suggestion` are retained in `note.metadata`. Imported agent findings use
+Each note requires `text` and a repository-relative `path`; `line` and
+`line_end` are optional. Stable string IDs update existing notes; notes without
+IDs match by location. `severity`, `confidence`, `category`, `evidence`, and
+`suggestion` are retained in `note.metadata`. Imported agent notes use
 `metadata.origin = "agent"`; existing notes without an origin are treated as
 user-authored. Agent notes use the robot glyph in source and quickfix/location-list
 buffers; user notes use the pencil in both. Without Nerd Fonts they fall back to
@@ -406,9 +410,9 @@ native item text.
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "origin": "agent",
-  "findings": [
+  "notes": [
     {
       "path": "lua/example.lua",
       "line": 10,
@@ -453,7 +457,7 @@ Structured records include annotation `metadata`; IDs and timestamps are not
 exported. Markdown stays concise and JSON/custom formatters receive metadata.
 General exports omit agent-authored notes by default; pass
 `include_agent_notes = true` or use `:QuickfixReviewExport!` to include them.
-`:QuickfixReviewExportUser` and `:QuickfixReviewExportAgent` select one origin.
+`:QuickfixReviewExportUser` and `:QuickfixReviewExportAgentNotes` select one origin.
 Built-in destinations are `clipboard`, `file`, and optional `sidekick`.
 See [`docs/integrations.md`](docs/integrations.md) for extension contracts.
 

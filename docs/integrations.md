@@ -98,14 +98,16 @@ clearing.
 `send_agent({ submit = true })` uses the normal Markdown pipeline to send
 selected user-authored review notes through Sidekick. General exports also omit
 agent notes unless `include_agent_notes = true`; explicit origin filters remain
-available. The agent returns one complete existing-schema payload through the
+available. Response generation is optional; when the user explicitly requests
+the Quickfix Review skill, it returns a version 2 notes payload through the
 watched `.quickfix-review/agent-response.json` mailbox, creating the mailbox
 directory first and using an unused prefixed variant if that path exists, then
 creates a matching `.ready` file. The watcher does not create repository files or
 modify Git metadata before that first response. Git exclusion is best-effort and
-warns on failure. Review imports through the normal merge path
-and deletes both files after success. Their disappearance confirms successful
-consumption, not failure. The mailbox is not persistent or synchronized state.
+warns on failure. Review imports through the normal merge path and deletes both
+files after success. Their disappearance confirms successful consumption, not
+failure. The mailbox is not persistent or synchronized state. Version 1 findings
+payloads remain accepted for compatibility.
 
 ## Native list rules
 
