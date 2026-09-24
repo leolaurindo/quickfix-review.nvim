@@ -55,15 +55,18 @@ SETUP                                                          *quickfix-review-
     send = "clipboard",
     nerd_font = true,
     notes_list = {
-      vertical = false, width = 40, wrap = true,
+      width = 40, vertical_side = "right",
       linebreak = true, breakindent = true,
     },
   })
 
-The notes_list options control vertical opening, width, and native wrap,
-linebreak, and breakindent for the read-only notes quickfix list. Use
-|QuickfixReviewListFile| from a source buffer for a filtered native view of that
-file's notes; the canonical owned list is unchanged.
+Use |QuickfixReviewListVertical| for a vertical split with wrapping or
+|QuickfixReviewListWrap| for a horizontal wrapped view; |QuickfixReviewList|
+opens horizontally without wrapping. `:QuickfixReviewListVertical [right|left]`
+chooses the side explicitly; otherwise notes_list.vertical_side is used (right by
+default). The notes_list.width option sets the initial split width; linebreak
+and breakindent configure native wrapping. Use |QuickfixReviewListFile| from a source buffer for a filtered
+native view of that file's notes; the canonical owned list is unchanged.
 
 Regular export and send commands use template="plain" by default. Built-ins are
 plain, check these notes, broader review, question, and implement. Configure a
@@ -123,7 +126,12 @@ COMMANDS                                                       *quickfix-review-
                                                         *QuickfixReviewDelete*
 :QuickfixReviewDelete  Delete a note.
                                                           *QuickfixReviewList*
-:QuickfixReviewList  Open the owned notes list.
+:QuickfixReviewList  Open the owned notes list horizontally without wrapping.
+                                                  *QuickfixReviewListVertical*
+:QuickfixReviewListVertical [right|left]  Open vertically; side defaults to
+                              notes_list.vertical_side (right) and can be overridden.
+                                                     *QuickfixReviewListWrap*
+:QuickfixReviewListWrap  Open the notes list horizontally with wrapping.
                                                     *QuickfixReviewListFile*
 :QuickfixReviewListFile  Open notes for the current source file.
                                                           *QuickfixReviewPick*

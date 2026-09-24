@@ -196,7 +196,9 @@ findings returned as importable notes. The response watcher can be disabled with
 | `:[range]QuickfixReviewReanchor[!]` | Move a note; `!` makes it file-level |
 | `:QuickfixReviewEdit` | Edit a note |
 | `:QuickfixReviewDelete` | Remove a note |
-| `:QuickfixReviewList` | Open the owned notes quickfix list |
+| `:QuickfixReviewList` | Open the owned notes quickfix list horizontally without wrapping |
+| `:QuickfixReviewListVertical [right|left]` | Open the owned notes list vertically with wrapping; defaults to `notes_list.vertical_side` |
+| `:QuickfixReviewListWrap` | Open the owned notes list horizontally with wrapping |
 | `:QuickfixReviewListFile` | Open notes for the current source file |
 | `:QuickfixReviewPick` | Pick an owned note |
 | `:QuickfixReviewPickCurrent` | Pick a note in the current list |
@@ -224,11 +226,16 @@ findings returned as importable notes. The response watcher can be disabled with
 | `:QuickfixReviewNext` / `:QuickfixReviewPrev` | Pick the next/previous note |
 | `:QuickfixReviewSend[!]` | Send without agent notes; `!` includes them |
 
-`:QuickfixReviewList` keeps the native read-only quickfix list and uses native
-wrapping for the path and note text in either layout. Set `notes_list.vertical`
-to `true` for a vertical split and customize its width and wrap options. Run
-`:QuickfixReviewListFile` from a source buffer to open a filtered native view of
-that file's notes without changing the canonical owned notes list.
+The Notes list remains a native, read-only quickfix list. Use
+`:QuickfixReviewListVertical [right|left]` for a vertical split with wrapping,
+or `:QuickfixReviewListWrap` for a horizontal wrapped view;
+`:QuickfixReviewList` opens it horizontally without wrapping. The vertical
+command uses `notes_list.vertical_side` (`right` by default) unless an explicit
+side is supplied. `notes_list.width` sets the vertical split's initial width;
+resize it with native quickfix-window commands or your own keymaps. Run
+`:QuickfixReviewListFile` from a source buffer to open a
+filtered native view of that file's notes without changing the canonical owned
+notes list.
 
 `QuickfixReviewAdd` accepts a range. `QuickfixReviewReanchor` accepts a range
 and `!` for file scope. Notes can be added from a source buffer, a quickfix row,
@@ -319,7 +326,7 @@ Defaults:
 | `template` | `"plain"` | Default export/send template |
 | `templates` | `{}` | Custom template framings keyed by name |
 | `quickfix_title` | `"Quickfix Review"` | Owned notes-list title |
-| `notes_list` | `{ vertical = false, width = 40, wrap = true, linebreak = true, breakindent = true }` | Notes-list window layout and wrapping |
+| `notes_list` | `{ width = 40, vertical_side = "right", linebreak = true, breakindent = true }` | Initial vertical width, default side, and native wrapping details |
 | `persist_review_list` | `true` | Watch the owned notes list when Persist is available |
 | `scope_policy` | `"branch"` | `branch`, `repository`, or `custom` note scope |
 | `nerd_font` | `true` | Use Nerd Font pencil and robot glyphs; set `false` for portable fallbacks |

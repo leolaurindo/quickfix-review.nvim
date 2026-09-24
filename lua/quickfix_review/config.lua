@@ -9,7 +9,7 @@ M.defaults = {
 	template = "plain",
 	templates = {},
 	quickfix_title = "Quickfix Review",
-	notes_list = { vertical = false, width = 40, wrap = true, linebreak = true, breakindent = true },
+	notes_list = { width = 40, vertical_side = "right", linebreak = true, breakindent = true },
 	persist_review_list = true,
 	scope_policy = "branch",
 	nerd_font = true,
@@ -41,6 +41,9 @@ function M.setup(opts)
 		and options.scope_policy ~= "custom"
 	then
 		options.scope_policy = "branch"
+	end
+	if options.notes_list.vertical_side ~= "left" and options.notes_list.vertical_side ~= "right" then
+		options.notes_list.vertical_side = "right"
 	end
 	return options
 end

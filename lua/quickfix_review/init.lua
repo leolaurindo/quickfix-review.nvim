@@ -606,8 +606,27 @@ function M.delete()
 	end
 end
 
-function M.open_list()
+local function notes_list_options(overrides)
+	local options = vim.tbl_extend(
+		"force",
+		{},
+		config.get().notes_list,
+		{ vertical = false, wrap = false },
+		overrides or {}
+	)
+	options.vertical_side = nil
+	options.side = nil
+	return options
+end
+
+function M.open_list(opts)
 	refresh_scope()
+	opts = opts or {}
+	local side = opts.side or config.get().notes_list.vertical_side
+	if opts.vertical and side ~= "left" and side ~= "right" then
+		return nil, "vertical side must be 'left' or 'right'"
+	end
+	local splitright = vim.o.splitright
 	local owned, target = lists.find_owned(scope_id())
 	if owned then
 		local items = vim.deepcopy(owned.items or {})
@@ -631,7 +650,13 @@ function M.open_list()
 			lists.replace(target, items, owned.idx, owned.changedtick)
 		end
 	end
-	local ok, err = lists.open_owned(scope_id(), config.get().notes_list)
+	if opts.vertical then
+		vim.o.splitright = side == "right"
+	end
+	local ok, err = lists.open_owned(scope_id(), notes_list_options(opts))
+	if opts.vertical then
+		vim.o.splitright = splitright
+	end
 	if not ok then
 		notify(err, vim.log.levels.INFO)
 	end
@@ -667,7 +692,7 @@ function M.open_file_notes()
 		items = items,
 	})
 	local current = vim.fn.getqflist({ id = 0 })
-	local ok, err = actions.open({ kind = "quickfix", id = current.id }, config.get().notes_list)
+	local ok, err = actions.open({ kind = "quickfix", id = current.id }, notes_list_options())
 	if not ok then
 		notify(err, vim.log.levels.INFO)
 	end
@@ -1076,6 +1101,22 @@ local function install_commands()
 	command("QuickfixReviewEdit", M.edit, { desc = "Edit a Quickfix Review annotation" })
 	command("QuickfixReviewDelete", M.delete, { desc = "Delete a Quickfix Review annotation" })
 	command("QuickfixReviewList", M.open_list, { desc = "Open the owned QuickfixReview list" })
+	command("QuickfixReviewListVertical", function(o)
+		if o.args ~= "" and o.args ~= "right" and o.args ~= "left" then
+			notify("usage: QuickfixReviewListVertical [right|left]", vim.log.levels.ERROR)
+			return
+		end
+		M.open_list({ vertical = true, wrap = true, side = o.args ~= "" and o.args or nil })
+	end, {
+		nargs = "?",
+		complete = function()
+			return { "right", "left" }
+		end,
+		desc = "Open the owned QuickfixReview list vertically [right|left]",
+	})
+	command("QuickfixReviewListWrap", function()
+		M.open_list({ wrap = true })
+	end, { desc = "Open the owned QuickfixReview list with wrapping" })
 	command("QuickfixReviewListFile", M.open_file_notes, { desc = "Open notes for the current file" })
 	command("QuickfixReviewPick", function()
 		M.pick({ source = "owned", scope_id = scope_id() })
