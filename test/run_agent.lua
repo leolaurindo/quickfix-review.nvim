@@ -130,9 +130,9 @@ notes.setup({
 	agent = { response = { watch = true } },
 })
 local response = {
-	version = 1,
+	version = 2,
 	origin = "agent",
-	findings = {
+	notes = {
 		{
 			path = "README.md",
 			line = 1,

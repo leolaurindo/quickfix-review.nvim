@@ -214,13 +214,13 @@ local invalid_buf = vim.api.nvim_create_buf(false, true)
 vim.api.nvim_buf_set_name(invalid_buf, "editor:///does/not/exist.lua")
 assert(not resolver.location(invalid_buf))
 
-local invalid_payload, invalid_payload_err = notes.import_findings({ version = 1, findings = { invalid = true } })
-assert(not invalid_payload and invalid_payload_err:find("findings array", 1, true))
+local invalid_payload, invalid_payload_err = notes.import_findings({ version = 2, notes = { invalid = true } })
+assert(not invalid_payload and invalid_payload_err:find("notes array", 1, true))
 
 local agent_payload = {
-	version = 1,
+	version = 2,
 	origin = "agent",
-	findings = {
+	notes = {
 		{
 			id = "agent-001",
 			path = "README.md",

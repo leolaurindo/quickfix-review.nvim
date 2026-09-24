@@ -19,8 +19,8 @@ Quickfix Review works standalone or as part of the [quickfix-kit.nvim](https://g
 
 ![Two source-buffer notes are sent to an agent and two findings return to the Quickfix Review list](assets/agent-workflow.gif)
 
-Any coding agent can return location-aware findings by writing one complete
-version 0 payload to `.quickfix-review/agent-response.json`, then creating the
+Any coding agent can return location-aware notes by writing one complete
+version 2 payload to `.quickfix-review/agent-response.json`, then creating the
 matching `.ready` marker. Quickfix Review watches that mailbox and imports the
 completed response automatically. The shipped
 [quickfix-review skill](skills/quickfix-review/SKILL.md) defines the payload
@@ -133,7 +133,7 @@ For an optional response round trip, explicitly ask Sidekick to use the
 1. Add notes from source buffers, quickfix/location-list entries, or diff rows.
 2. Send selected user-authored notes to Sidekick with
    `:QuickfixReviewSendAgent`, optionally submitting immediately with `!`.
-3. The skill asks the agent to return versioned findings JSON to the repository
+3. The skill asks the agent to return versioned notes JSON to the repository
    response mailbox.
 4. Quickfix Review watches that mailbox and imports completed responses
    automatically. You can also import a response explicitly with
@@ -386,7 +386,7 @@ require("quickfix_review").export({ warn_stale = false })
 
 ## Import
 
-Import versioned agent findings into the owned notes quickfix list:
+Import versioned agent notes into the owned notes quickfix list:
 
 ```vim
 :QuickfixReviewImport
@@ -395,12 +395,13 @@ Import versioned agent findings into the owned notes quickfix list:
 
 The argument is optional and defaults to the configured repository response path,
 `.quickfix-review/agent-response.json`. The equivalent Lua API accepts the same
-optional source.
+optional source. New payloads use `version: 2` with a top-level `notes` array;
+legacy `version: 1` payloads with `findings` remain accepted.
 
-Each finding requires `text` and a repository-relative `path`; `line` and
-`line_end` are optional. Stable string IDs update existing findings; findings
-without IDs match by location. `severity`, `confidence`, `category`, `evidence`,
-and `suggestion` are retained in `note.metadata`. Imported agent findings use
+Each note requires `text` and a repository-relative `path`; `line` and
+`line_end` are optional. Stable string IDs update existing notes; notes without
+IDs match by location. `severity`, `confidence`, `category`, `evidence`, and
+`suggestion` are retained in `note.metadata`. Imported agent notes use
 `metadata.origin = "agent"`; existing notes without an origin are treated as
 user-authored. Agent notes use the robot glyph in source and quickfix/location-list
 buffers; user notes use the pencil in both. Without Nerd Fonts they fall back to
@@ -409,9 +410,9 @@ native item text.
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "origin": "agent",
-  "findings": [
+  "notes": [
     {
       "path": "lua/example.lua",
       "line": 10,
