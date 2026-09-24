@@ -22,8 +22,15 @@ local exporter = require("quickfix_review.export")
 local source = require("quickfix_review.source")
 local mover = require("quickfix_review.reanchor")
 local ui = require("quickfix_review.ui")
-review.setup({ persist_review_list = false, agent = { response = { watch = false } } })
+review.setup({
+	persist_review_list = false,
+	agent = { response = { watch = false } },
+	notes_list = { width = 32, vertical_side = "right", linebreak = true, breakindent = true },
+})
 assert(vim.fn.exists(":QuickfixReviewAddFile") == 2)
+assert(vim.fn.exists(":QuickfixReviewListFile") == 2)
+assert(vim.fn.exists(":QuickfixReviewListVertical") == 2)
+assert(vim.fn.exists(":QuickfixReviewListWrap") == 2)
 assert(vim.fn.exists(":QuickfixReviewReanchor") == 2)
 assert(vim.fn.exists(":QuickfixReviewSearch") == 2)
 
@@ -46,6 +53,25 @@ local function choose(id)
 	end
 end
 
+local function assert_vertical(win, side)
+	local info = vim.fn.getwininfo(win)[1]
+	for _, peer in ipairs(vim.api.nvim_list_wins()) do
+		if peer ~= win then
+			local peer_info = vim.fn.getwininfo(peer)[1]
+			assert(info.winrow == peer_info.winrow)
+			assert(vim.api.nvim_win_get_height(win) == vim.api.nvim_win_get_height(peer))
+			assert(vim.api.nvim_win_get_width(win) < vim.api.nvim_win_get_width(peer))
+			if side == "right" then
+				assert(info.wincol > peer_info.wincol)
+			else
+				assert(info.wincol < peer_info.wincol)
+			end
+			return
+		end
+	end
+	error("vertical Notes list must have an adjacent editor window")
+end
+
 input("line note")
 vim.api.nvim_win_set_cursor(0, { 4, 0 })
 review.add()
@@ -64,6 +90,63 @@ assert(entry("line note").line == 4)
 local records = assert(exporter.records({ list = file_note.list, root = root }))
 assert(assert(exporter.format(records, "markdown")):find("- `one.txt` - file note", 1, true))
 assert(not records[1].labels and not records[2].labels)
+
+assert(review.open_list())
+local list_win = vim.api.nvim_get_current_win()
+assert(vim.bo.buftype == "quickfix" and vim.fn.getwininfo(list_win)[1].quickfix == 1)
+for option, expected in pairs({ wrap = false, linebreak = true, breakindent = true }) do
+	assert(vim.api.nvim_get_option_value(option, { win = list_win }) == expected)
+end
+local classic_items = vim.fn.getqflist({ id = 0, all = 1 }).items
+assert(#classic_items == 2 and classic_items[1].text == "line note")
+vim.cmd.QuickfixReviewListVertical()
+list_win = vim.api.nvim_get_current_win()
+assert(vim.bo.buftype == "quickfix" and vim.api.nvim_win_get_width(list_win) == 32)
+assert(vim.fn.getwininfo(list_win)[1].quickfix == 1)
+assert(vim.api.nvim_get_option_value("wrap", { win = list_win }) == true)
+assert_vertical(list_win, "right")
+assert(vim.o.splitright == false)
+local vertical_items = vim.fn.getqflist({ id = 0, all = 1 }).items
+assert(#vertical_items == 2 and vertical_items[1].text == "line note")
+vim.o.splitright = true
+vim.cmd("QuickfixReviewListVertical left")
+list_win = vim.api.nvim_get_current_win()
+assert_vertical(list_win, "left")
+assert(vim.o.splitright == true)
+vim.o.splitright = false
+vim.cmd.cclose()
+vim.cmd.QuickfixReviewListWrap()
+list_win = vim.api.nvim_get_current_win()
+assert(vim.fn.getwininfo(list_win)[1].quickfix == 1)
+assert(vim.api.nvim_get_option_value("wrap", { win = list_win }) == true)
+vim.cmd.cclose()
+review.setup({
+	persist_review_list = false,
+	agent = { response = { watch = false } },
+	notes_list = { width = 40, linebreak = true, breakindent = true },
+})
+assert(require("quickfix_review.config").get().notes_list.vertical_side == "right")
+assert(review.open_list())
+list_win = vim.api.nvim_get_current_win()
+assert(vim.fn.getwininfo(list_win)[1].quickfix == 1)
+for option, expected in pairs({ wrap = false, linebreak = true, breakindent = true }) do
+	assert(vim.api.nvim_get_option_value(option, { win = list_win }) == expected)
+end
+vim.cmd.cclose()
+assert(review.open_file_notes())
+local file_view = vim.fn.getqflist({ id = 0, all = 1 })
+assert(file_view.context.quickfix_review.role == "file_notes" and #file_view.items == 2)
+for _, item in ipairs(file_view.items) do
+	local note = assert(annotations.get(item))
+	assert(note.location.path == "one.txt")
+	local canonical
+	for _, owned_item in ipairs(assert(lists.find_owned(require("quickfix_review.scope").id(review.scope()))).items) do
+		local original = annotations.get(owned_item)
+		if original and original.id == note.id then canonical = original end
+	end
+	assert(canonical and vim.deep_equal(note, canonical))
+end
+vim.cmd.cclose()
 
 -- Unsaved edits, external writes, deletion, and restoring the original content.
 vim.api.nvim_buf_set_lines(0, 0, 1, false, {})
@@ -216,4 +299,5 @@ for _, kind in ipairs({ "quickfix", "location" }) do
 	assert(entry(kind .. " note").line == 2)
 	assert(not annotations.get(assert(lists.read(target)).items[1]))
 end
+
 print("quickfix_review note lifecycle tests passed")

@@ -12,6 +12,7 @@ All notable changes to Quickfix Review are documented here.
 
 - Renamed `:QuickfixReviewExportAgent` to `:QuickfixReviewExportAgentNotes`.
 - Ordinary agent sends no longer require response-mailbox instructions. New response payloads use version 2 `notes`; version 1 `findings` payloads remain supported.
+- Configurable native notes-list layout and wrapping, plus `:QuickfixReviewListFile` for current-file notes.
 
 ## [0.3.2] - 2026-09-22
 

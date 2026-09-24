@@ -315,7 +315,10 @@ local function qf_entry_is_owned(entry)
 	return entry.kind == "quickfix"
 		and type(entry.list.context) == "table"
 		and type(entry.list.context.quickfix_review) == "table"
-		and entry.list.context.quickfix_review.role == "notes"
+		and (
+			entry.list.context.quickfix_review.role == "notes"
+			or entry.list.context.quickfix_review.role == "file_notes"
+		)
 end
 
 
@@ -603,8 +606,27 @@ function M.delete()
 	end
 end
 
-function M.open_list()
+local function notes_list_options(overrides)
+	local options = vim.tbl_extend(
+		"force",
+		{},
+		config.get().notes_list,
+		{ vertical = false, wrap = false },
+		overrides or {}
+	)
+	options.vertical_side = nil
+	options.side = nil
+	return options
+end
+
+function M.open_list(opts)
 	refresh_scope()
+	opts = opts or {}
+	local side = opts.side or config.get().notes_list.vertical_side
+	if opts.vertical and side ~= "left" and side ~= "right" then
+		return nil, "vertical side must be 'left' or 'right'"
+	end
+	local splitright = vim.o.splitright
 	local owned, target = lists.find_owned(scope_id())
 	if owned then
 		local items = vim.deepcopy(owned.items or {})
@@ -628,10 +650,53 @@ function M.open_list()
 			lists.replace(target, items, owned.idx, owned.changedtick)
 		end
 	end
-	local ok, err = lists.open_owned(scope_id())
+	if opts.vertical then
+		vim.o.splitright = side == "right"
+	end
+	local ok, err = lists.open_owned(scope_id(), notes_list_options(opts))
+	if opts.vertical then
+		vim.o.splitright = splitright
+	end
 	if not ok then
 		notify(err, vim.log.levels.INFO)
 	end
+	return ok, err
+end
+
+function M.open_file_notes()
+	refresh_scope()
+	local name = vim.api.nvim_buf_get_name(0)
+	if name == "" then
+		notify("current buffer has no file", vim.log.levels.INFO)
+		return false
+	end
+	local current_file = vim.fs.normalize(vim.fn.fnamemodify(name, ":p"))
+	local owned = lists.find_owned(scope_id())
+	local items = {}
+	for _, item in ipairs(owned and owned.items or {}) do
+		local note = annotations.get(item)
+		if note and location.absolute(note.location) == current_file then
+			local copy = vim.deepcopy(item)
+			copy.text = flatten(note.text)
+			items[#items + 1] = copy
+		end
+	end
+	if #items == 0 then
+		notify("no Quickfix Review notes for this file", vim.log.levels.INFO)
+		return false
+	end
+	vim.fn.setqflist({}, " ", {
+		nr = "$",
+		title = "Quickfix Review: " .. vim.fn.fnamemodify(current_file, ":."),
+		context = { quickfix_review = { version = 1, role = "file_notes", scope_id = scope_id(), path = current_file } },
+		items = items,
+	})
+	local current = vim.fn.getqflist({ id = 0 })
+	local ok, err = actions.open({ kind = "quickfix", id = current.id }, notes_list_options())
+	if not ok then
+		notify(err, vim.log.levels.INFO)
+	end
+	return ok, err
 end
 
 function M.pick(opts)
@@ -1036,6 +1101,23 @@ local function install_commands()
 	command("QuickfixReviewEdit", M.edit, { desc = "Edit a Quickfix Review annotation" })
 	command("QuickfixReviewDelete", M.delete, { desc = "Delete a Quickfix Review annotation" })
 	command("QuickfixReviewList", M.open_list, { desc = "Open the owned QuickfixReview list" })
+	command("QuickfixReviewListVertical", function(o)
+		if o.args ~= "" and o.args ~= "right" and o.args ~= "left" then
+			notify("usage: QuickfixReviewListVertical [right|left]", vim.log.levels.ERROR)
+			return
+		end
+		M.open_list({ vertical = true, wrap = true, side = o.args ~= "" and o.args or nil })
+	end, {
+		nargs = "?",
+		complete = function()
+			return { "right", "left" }
+		end,
+		desc = "Open the owned QuickfixReview list vertically [right|left]",
+	})
+	command("QuickfixReviewListWrap", function()
+		M.open_list({ wrap = true })
+	end, { desc = "Open the owned QuickfixReview list with wrapping" })
+	command("QuickfixReviewListFile", M.open_file_notes, { desc = "Open notes for the current file" })
 	command("QuickfixReviewPick", function()
 		M.pick({ source = "owned", scope_id = scope_id() })
 	end, { desc = "Pick a QuickfixReview annotation" })
