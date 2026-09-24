@@ -25,10 +25,10 @@ pre-existing behavior, or unsupported speculation.
 
 ## Automatic responses
 
-The Sidekick message contains a section headed `Quickfix Review notes for this
-review:` and ending at `End of Quickfix Review notes.`. That delimited section is
-the user's review notes for this request. Review the notes in that section;
-conversation outside it is not part of the Quickfix Review payload. Different
+The Sidekick message includes the formatted review notes supplied by the user.
+Treat those notes as the review scope; do not assume the message has fixed
+Quickfix Review delimiters. Include any explicit question or implementation
+request in scope; modify source only when separately authorized. Different
 requests may cover different files or chunks; the response file is only the
 return channel, not a task database.
 

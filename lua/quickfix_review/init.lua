@@ -664,26 +664,82 @@ local function selected_target(opts)
 	return owned and { kind = "quickfix", id = owned.id }
 end
 
+local builtin_templates = {
+	plain = {},
+	["check these notes"] = {
+		prefix = "Check these notes against the relevant code. Verify each note without broadening the review.\n\n",
+	},
+	["broader review"] = {
+		prefix = "Review these notes against the relevant code, and also look for other actionable issues.\n\n",
+	},
+	question = { prefix = "Answer the question in these notes using relevant code context. Be concise.\n\n" },
+	implement = {
+		prefix = "Implement the requested changes from these notes. Add or update tests, run relevant checks, and avoid unrelated changes.\n\n",
+	},
+}
+
+local function template_names()
+	local names, seen = {}, {}
+	for name in pairs(builtin_templates) do
+		names[#names + 1], seen[name] = name, true
+	end
+	for name in pairs(config.get().templates or {}) do
+		if not seen[name] then
+			names[#names + 1] = name
+		end
+	end
+	table.sort(names)
+	return names
+end
+
+local function apply_template(opts)
+	local name = opts.template or config.get().template or "plain"
+	local frame = (config.get().templates or {})[name] or builtin_templates[name]
+	if type(frame) == "string" then
+		frame = { prefix = frame }
+	end
+	if type(frame) ~= "table" then
+		return nil, "unknown template: " .. tostring(name)
+	end
+	opts.template = nil
+	if frame.prefix and opts.prefix then
+		opts.prefix = frame.prefix .. opts.prefix
+	else
+		opts.prefix = opts.prefix or frame.prefix
+	end
+	if frame.suffix and opts.suffix then
+		opts.suffix = opts.suffix .. frame.suffix
+	else
+		opts.suffix = opts.suffix or frame.suffix
+	end
+	return opts
+end
+
+local function select_template(callback, opts)
+	local names = template_names()
+	vim.ui.select(names, { prompt = "Choose a Quickfix Review template" }, function(name)
+		if name then
+			opts.template = name
+			callback(opts)
+		end
+	end)
+end
+
+function M.export_from_template(opts)
+	select_template(M.export, vim.tbl_extend("force", {}, opts or {}))
+end
+
+function M.send_agent_from_template(opts)
+	select_template(M.send_agent, vim.tbl_extend("force", {}, opts or {}))
+end
+
 function M.send_agent(opts)
 	opts = opts or {}
-	local response_path = config.get().agent.response.path
-	local instructions = table.concat({
-		"",
-		"Review these notes, then create the response directory and write one complete version 1 findings JSON payload to "
-			.. response_path
-			.. ".",
-		"If that file already exists, do not modify it; add a unique prefix before its filename and use that path instead.",
-		"After the payload write finishes, create an empty <payload-path>.ready file to signal completion.",
-		"Do not accumulate prior responses. Quickfix Review deletes both files after a successful import.",
-		"Their disappearance confirms successful consumption; do not recreate them for this review request.",
-	}, "\n")
 	return M.export(vim.tbl_extend("force", {}, opts, {
 		list = selected_target(opts),
 		note_origin = "user",
 		destination = "sidekick",
 		destination_opts = { submit = opts.submit == true },
-		prefix = "Quickfix Review notes for this review:\n\n",
-		suffix = "\nEnd of Quickfix Review notes." .. instructions,
 	}))
 end
 
@@ -704,7 +760,13 @@ end
 
 function M.export(opts)
 	refresh_scope()
-	opts = opts or {}
+	opts = vim.tbl_extend("force", {}, opts or {})
+	local template_err
+	opts, template_err = apply_template(opts)
+	if not opts then
+		notify(template_err, vim.log.levels.ERROR)
+		return false, template_err
+	end
 	opts.scope_id, opts.root = scope_id(), current_scope and current_scope.root
 	local records, err, details = exporter.records(vim.tbl_extend("force", opts, { list = selected_target(opts) }))
 	if not records then
@@ -986,6 +1048,12 @@ local function install_commands()
 	command("QuickfixReviewExport", function(o)
 		M.export({ include_agent_notes = o.bang })
 	end, { bang = true, desc = "Export the selected list (! includes agent notes)" })
+	command("QuickfixReviewExportFromTemplate", function(o)
+		M.export_from_template({ include_agent_notes = o.bang })
+	end, { bang = true, desc = "Choose a template and export (! includes agent notes)" })
+	command("QuickfixReviewSendAgentFromTemplate", function(o)
+		M.send_agent_from_template({ submit = o.bang })
+	end, { bang = true, desc = "Choose a template and send to Sidekick (! submits)" })
 	command("QuickfixReviewSendAgent", function(o)
 		M.send_agent({ submit = o.bang })
 	end, { bang = true, desc = "Send review notes to Sidekick (! submits)" })
@@ -996,7 +1064,7 @@ local function install_commands()
 		desc = "Retry retained agent response files",
 	})
 	command("QuickfixReviewExportUser", M.export_user, { desc = "Export user-authored notes" })
-	command("QuickfixReviewExportAgent", M.export_agent, { desc = "Export agent-authored notes" })
+	command("QuickfixReviewExportAgentNotes", M.export_agent, { desc = "Export agent-authored notes" })
 	command("QuickfixReviewExportList", M.export_qf, { desc = "Export the current native list" })
 	command("QuickfixReviewExportAndClear", function(o)
 		M.export_and_clear({ include_agent_notes = o.bang })

@@ -79,18 +79,46 @@ sender.register({
 })
 assert(notes.send_agent({ list = target, submit = false }))
 assert(submitted == false)
-assert(sent:find("Quickfix Review notes for this review:", 1, true))
 assert(sent:find("Inspect this cleanup", 1, true))
 assert(not sent:find("unreviewed producer row", 1, true))
-assert(sent:find("End of Quickfix Review notes.", 1, true))
-assert(sent:find("Review these notes", 1, true))
-assert(sent:find("create the response directory", 1, true))
-assert(sent:find(".quickfix-review/agent-response.json", 1, true))
-assert(sent:find("If that file already exists", 1, true))
-assert(sent:find("<payload%-path>%.ready"))
-assert(sent:find("deletes both files after a successful import", 1, true))
-assert(sent:find("disappearance confirms successful consumption", 1, true))
-assert(sent:find("do not recreate them for this review request", 1, true))
+assert(not sent:find("agent-response.json", 1, true))
+assert(not sent:find("findings JSON", 1, true))
+assert(not sent:find("Quickfix Review notes for this review:", 1, true))
+assert(not sent:find("End of Quickfix Review notes.", 1, true))
+
+local select = vim.ui.select
+local selected_options
+vim.ui.select = function(items, options, callback)
+	selected_options = options
+	assert(vim.tbl_contains(items, "question"))
+	callback("question", 1)
+end
+notes.send_agent_from_template({ list = target, submit = false })
+assert(selected_options.prompt == "Choose a Quickfix Review template")
+assert(sent:find("Answer the question in these notes", 1, true))
+assert(require("quickfix_review.config").get().template == "plain")
+vim.ui.select = function(_, _, callback) callback("broader review", 2) end
+notes.export_from_template({ list = target, destination = "sidekick" })
+assert(sent:find("also look for other actionable issues", 1, true))
+assert(require("quickfix_review.config").get().template == "plain")
+vim.ui.select = function(_, _, callback) callback(nil) end
+local cancelled_payload = sent
+notes.export_from_template({ list = target, destination = "sidekick" })
+assert(sent == cancelled_payload)
+vim.ui.select = select
+
+notes.setup({ template = "implement", persist_review_list = false, scope_policy = "repository" })
+sender.register({ name = "sidekick", send = function(payload)
+	sent = payload
+	return true
+end })
+assert(notes.export({ list = target, destination = "sidekick" }))
+assert(sent:find("Implement the requested changes", 1, true))
+notes.setup({ template = "plain", persist_review_list = false, scope_policy = "repository" })
+sender.register({ name = "sidekick", send = function(payload, opts)
+	sent, submitted = payload, opts.submit
+	return true
+end })
 vim.cmd("copen")
 vim.cmd("QuickfixReviewSendAgent!")
 assert(submitted == true)
