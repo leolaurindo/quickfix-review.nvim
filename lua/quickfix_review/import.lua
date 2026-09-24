@@ -35,12 +35,10 @@ end
 
 function M.validate(payload)
 	local entries
-	if type(payload) == "table" and payload.version == 1 and vim.islist(payload.findings) then
-		entries = payload.findings
-	elseif type(payload) == "table" and payload.version == 2 and vim.islist(payload.notes) then
+	if type(payload) == "table" and payload.version == 2 and vim.islist(payload.notes) then
 		entries = payload.notes
 	else
-		return nil, "notes payload must contain version 2 and a notes array (or legacy version 1 findings)"
+		return nil, "notes payload must contain version 2 and a notes array"
 	end
 	if payload.branch ~= nil and (type(payload.branch) ~= "string" or payload.branch == "") then
 		return nil, "notes payload branch must be a non-empty string"

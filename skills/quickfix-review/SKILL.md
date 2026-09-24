@@ -106,7 +106,7 @@ Required fields are top-level `version`, `origin`, and `notes`, plus
 branch name as an import guard; it is optional for older/manual payloads. `line`
 and `line_end` are optional for file notes. Set `origin` to `agent`, use
 repository-relative paths and positive 1-based line numbers. Omit IDs; Neovim
-assigns internal note identity. Version 1
-`findings` payloads remain accepted for compatibility.
+assigns internal note identity. Emit only version 2 payloads with a top-level
+`notes` array; version 1 `findings` payloads are rejected.
 Do not include absolute paths outside the repository, prose outside the JSON, or
 executable content.

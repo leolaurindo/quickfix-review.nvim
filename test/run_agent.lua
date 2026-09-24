@@ -164,9 +164,9 @@ end, 20))
 assert(vim.fn.filereadable(response_path) == 0)
 assert(vim.fn.filereadable(ready_path) == 0)
 local user_payload = {
-	version = 1,
+	version = 2,
 	origin = "user",
-	findings = { { id = "user-one", path = "README.md", line = 1, text = "User response" } },
+	notes = { { id = "user-one", path = "README.md", line = 1, text = "User response" } },
 }
 local user_result = assert(notes.import_findings(user_payload))
 assert(user_result.added == 1)
@@ -208,9 +208,9 @@ notes.setup({
 -- let that pending work run before the watcher exercised below is installed.
 vim.wait(100)
 assert(vim.fn.writefile({ vim.json.encode({
-	version = 1,
+	version = 2,
 	origin = "agent",
-	findings = { { id = "manual-default", path = "README.md", text = "Imported from the default path" } },
+	notes = { { id = "manual-default", path = "README.md", text = "Imported from the default path" } },
 }) }, response_path) == 0)
 vim.cmd("QuickfixReviewImport " .. vim.fn.fnameescape(response_path))
 assert(vim.fn.filereadable(response_path) == 1)
@@ -251,18 +251,13 @@ agent_file.stop()
 local scope_module = require("quickfix_review.scope")
 local active_branch = assert(scope_module.branch(root))
 local deferred_branch = "qfr-review-deferred"
-local function response_payload(id, branch, version)
-	local payload = {
-		version = version or 2,
+local function response_payload(id, branch)
+	return {
+		version = 2,
 		origin = "agent",
 		branch = branch,
 		notes = { { id = id, path = "agent-import-test.md", line = 1, text = id } },
 	}
-	if payload.version == 1 then
-		payload.findings = payload.notes
-		payload.notes = nil
-	end
-	return payload
 end
 local function write_ready(name, payload)
 	local path = vim.fs.joinpath(response_dir, name .. "-agent-response.json")
@@ -300,7 +295,7 @@ assert(scope_module.branch(root) == deferred_branch)
 
 notes.setup({ persist_review_list = false, scope_policy = "repository", agent = { response = { watch = false } } })
 vim.wait(100)
-local no_branch = write_ready("no-branch", response_payload("batch-no-branch", nil, 1))
+local no_branch = write_ready("no-branch", response_payload("batch-no-branch", nil))
 local matching = write_ready("batch-match", response_payload("batch-match", deferred_branch))
 local mismatching = write_ready("batch-mismatch", response_payload("batch-mismatch", active_branch))
 local unsupported = write_ready("unsupported", { version = 99, origin = "agent", notes = {} })
@@ -342,8 +337,8 @@ assert(vim.fn.writefile({ "outside" }, vim.fs.joinpath(outside, "outside.lua")) 
 local link = vim.fs.joinpath(root, "outside-link")
 assert(vim.uv.fs_symlink(outside, link))
 local escaped = assert(notes.import_findings({
-	version = 1,
-	findings = { { id = "escaped", path = "outside-link/outside.lua", text = "must be rejected" } },
+	version = 2,
+	notes = { { id = "escaped", path = "outside-link/outside.lua", text = "must be rejected" } },
 }))
 assert(escaped.skipped == 1 and escaped.errors[1]:find("outside", 1, true))
 vim.fn.delete(link)

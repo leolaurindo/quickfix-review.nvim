@@ -405,7 +405,7 @@ Import versioned agent notes into the owned notes quickfix list:
 
 ```vim
 :QuickfixReviewImport
-:QuickfixReviewImport path/to/findings.json
+:QuickfixReviewImport path/to/notes.json
 ```
 
 With no filename, `:QuickfixReviewImport` imports every eligible ready response
@@ -414,9 +414,9 @@ that file, whether or not it has a `.ready` marker. A top-level `branch` field
 restricts import to that Git branch; mismatches remain queued in automatic and
 batch imports. For an explicit file only, `:QuickfixReviewImport! <file>` bypasses
 the branch guard, not schema validation. The equivalent Lua API accepts a table
-or file path. New payloads use `version: 2` with a top-level `notes` array; legacy
-`version: 1` payloads with `findings` remain accepted. Payloads without `branch`
-retain the prior behavior and import into the active review scope.
+or file path. Payloads must use `version: 2` with a top-level `notes` array;
+`version: 1` payloads with `findings` are rejected. Payloads without `branch`
+import into the active review scope.
 
 The automatic watcher and no-argument batch command consume a payload and its
 `.ready` marker only after successful import. Invalid or unsupported payloads
