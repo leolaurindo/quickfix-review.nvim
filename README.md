@@ -217,7 +217,7 @@ findings returned as importable notes. The response watcher can be disabled with
 | `:QuickfixReviewClearAgent` | Clear agent-authored notes in the current review scope |
 | `:QuickfixReviewSaveList <name>` | Save the selected native list |
 | `:QuickfixReviewLoadList <name>` | Load a named native list |
-| `:QuickfixReviewImport [file]` | Import findings from JSON; defaults to the repository mailbox path |
+| `:QuickfixReviewImport[!] [file]` | Import all eligible ready responses, or one explicit JSON file; `!` with a file bypasses its branch guard |
 | `:QuickfixReviewHide` / `:QuickfixReviewShow` | Toggle source marks |
 | `:QuickfixReviewHover` | Show a qf-row note or a source note containing the cursor |
 | `:QuickfixReviewHoverAll` | Toggle persistent note overlays at visible source-range endpoints |
@@ -408,10 +408,22 @@ Import versioned agent notes into the owned notes quickfix list:
 :QuickfixReviewImport path/to/findings.json
 ```
 
-The argument is optional and defaults to the configured repository response path,
-`.quickfix-review/agent-response.json`. The equivalent Lua API accepts the same
-optional source. New payloads use `version: 2` with a top-level `notes` array;
-legacy `version: 1` payloads with `findings` remain accepted.
+With no filename, `:QuickfixReviewImport` imports every eligible ready response
+in the configured mailbox directory. `:QuickfixReviewImport <file>` imports only
+that file, whether or not it has a `.ready` marker. A top-level `branch` field
+restricts import to that Git branch; mismatches remain queued in automatic and
+batch imports. For an explicit file only, `:QuickfixReviewImport! <file>` bypasses
+the branch guard, not schema validation. The equivalent Lua API accepts a table
+or file path. New payloads use `version: 2` with a top-level `notes` array; legacy
+`version: 1` payloads with `findings` remain accepted. Payloads without `branch`
+retain the prior behavior and import into the active review scope.
+
+The automatic watcher and no-argument batch command consume a payload and its
+`.ready` marker only after successful import. Invalid or unsupported payloads
+remain available for correction and retry. Ready responses deferred by a branch
+mismatch are rescanned when Quickfix Review observes a branch/worktree change.
+Each agent response should use its own collision-resistant prefixed filename
+ending in `-agent-response.json`; never overwrite another response.
 
 Each note requires `text` and a repository-relative `path`; `line` and
 `line_end` are optional. Stable string IDs update existing notes; notes without
@@ -427,6 +439,7 @@ native item text.
 {
   "version": 2,
   "origin": "agent",
+  "branch": "main",
   "notes": [
     {
       "path": "lua/example.lua",

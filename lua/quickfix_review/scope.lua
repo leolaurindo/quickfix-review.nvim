@@ -21,6 +21,11 @@ function M.resolve(policy, custom, cwd)
 	return { policy = "branch", root = root, branch = branch }
 end
 
+function M.branch(root)
+	local branch = git({ "git", "branch", "--show-current" }, root)
+	return branch ~= "" and branch or nil
+end
+
 function M.id(value)
 	return table.concat({ value.policy or "repository", value.root or "", value.branch or "<detached>" }, "\0")
 end

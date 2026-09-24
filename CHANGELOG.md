@@ -7,6 +7,7 @@ All notable changes to Quickfix Review are documented here.
 ### Added
 
 - Configurable export and agent-send templates with one-shot template-selection commands.
+- Branch-gated agent response imports and batch import of eligible ready mailbox files.
 
 ### Changed
 
