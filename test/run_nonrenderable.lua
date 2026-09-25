@@ -17,7 +17,10 @@ assert(vim.wait(1000, function()
 	return review.scope() ~= nil
 end))
 
-local owned, target = lists.ensure_owned({ title = "Quickfix Review" }, require("quickfix_review.scope").id(review.scope()))
+local owned, target = lists.ensure_owned(
+	{ title = "Quickfix Review" },
+	require("quickfix_review.scope").id(review.scope())
+)
 for line, text in pairs({ [2] = "first note", [4] = "second note" }) do
 	local item = { filename = vim.fs.joinpath(project, "README.md"), lnum = line, valid = 1, text = text, user_data = {} }
 	local value = { root = project, path = "README.md", line = line, resolver = "normal" }

@@ -50,11 +50,23 @@ assert(vim.wait(1000, function()
 	return review.scope() ~= nil
 end))
 
-local owned, target = lists.ensure_owned({ title = "Quickfix Review" }, require("quickfix_review.scope").id(review.scope()))
+local owned, target = lists.ensure_owned(
+	{ title = "Quickfix Review" },
+	require("quickfix_review.scope").id(review.scope())
+)
 for _, note in ipairs({
-	{ location = { root = root, path = "README.md", line = 2, line_end = 4, resolver = "normal" }, text = "new range" },
-	{ location = { root = root, path = "README.md", line = 2, line_end = 4, side = "old", resolver = "normal" }, text = "old range" },
-	{ location = { root = root, path = "README.md", line = 2, side = "old", revision = "historical", resolver = "normal" }, text = "historical old" },
+	{
+		location = { root = root, path = "README.md", line = 2, line_end = 4, resolver = "normal" },
+		text = "new range",
+	},
+	{
+		location = { root = root, path = "README.md", line = 2, line_end = 4, side = "old", resolver = "normal" },
+		text = "old range",
+	},
+	{
+		location = { root = root, path = "README.md", line = 2, side = "old", revision = "historical", resolver = "normal" },
+		text = "historical old",
+	},
 }) do
 	local item = { filename = vim.fs.joinpath(root, "README.md"), lnum = 2, valid = 1, text = note.text, user_data = {} }
 	assert(annotations.set(item, note.location, note.text))

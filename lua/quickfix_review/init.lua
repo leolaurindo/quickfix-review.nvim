@@ -744,7 +744,10 @@ local builtin_templates = {
 	},
 	question = { prefix = "Answer the question in these notes using relevant code context. Be concise.\n\n" },
 	implement = {
-		prefix = "Implement the requested changes from these notes. Add or update tests, run relevant checks, and avoid unrelated changes.\n\n",
+		prefix = table.concat({
+			"Implement the requested changes from these notes. Add or update tests, run relevant checks,",
+			"and avoid unrelated changes.",
+		}, " ") .. "\n\n",
 	},
 }
 
