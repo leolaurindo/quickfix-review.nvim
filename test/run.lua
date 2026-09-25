@@ -216,23 +216,21 @@ assert(not resolver.location(invalid_buf))
 
 local invalid_payload, invalid_payload_err = notes.import_findings({ version = 2, notes = { invalid = true } })
 assert(not invalid_payload and invalid_payload_err:find("notes array", 1, true))
-local legacy_payload, legacy_payload_err = require("quickfix_review.import").validate({
+local unsupported_version_payload, unsupported_version_err = require("quickfix_review.import").validate({
 	version = 1,
-	findings = { { path = "README.md", text = "Legacy payload" } },
+	findings = { { path = "README.md", text = "Unsupported payload" } },
 })
-assert(not legacy_payload and legacy_payload_err:find("version 2 and a notes array", 1, true))
-
+assert(not unsupported_version_payload and unsupported_version_err:find("version 2 and a notes array", 1, true))
 local agent_payload = {
 	version = 2,
 	origin = "agent",
+	label = "discard this",
 	notes = {
 		{
 			id = "agent-001",
-			path = "README.md",
-			line = 12,
+			location = { path = "README.md", line = 12, label = "discard this too" },
 			text = "The agent found a review concern.",
-			severity = "high",
-			confidence = 0.94,
+			label = "discard this as well",
 		},
 		{
 			id = "agent-002",
@@ -249,8 +247,7 @@ for _, item in ipairs(imported_owned.items) do
 	local note = annotations.get(item)
 	if note and note.id == "agent-001" then
 		imported_note = note
-		assert(note.metadata.origin == "agent")
-		assert(note.metadata.severity == "high")
+		assert(vim.deep_equal(note.metadata, { origin = "agent" }))
 		assert(item.filename == file and item.lnum == 12)
 	end
 end

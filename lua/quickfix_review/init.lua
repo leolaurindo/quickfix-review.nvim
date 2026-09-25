@@ -734,8 +734,13 @@ local builtin_templates = {
 	["check these notes"] = {
 		prefix = "Check these notes against the relevant code. Verify each note without broadening the review.\n\n",
 	},
-	["broader review"] = {
-		prefix = "Review these notes against the relevant code, and also look for other actionable issues.\n\n",
+	["review and answer"] = {
+		prefix = table.concat({
+			"Review each note below and answer it.",
+			"Inspect relevant code and use diff context where available.",
+			"Report any other actionable issues you find.",
+			"Answer with Quickfix Review notes.",
+		}, " ") .. "\n\n",
 	},
 	question = { prefix = "Answer the question in these notes using relevant code context. Be concise.\n\n" },
 	implement = {
@@ -1086,10 +1091,9 @@ configure_agent = function(force)
 			end
 			return true
 		end,
-		import = function(payload, id_namespace)
+		import = function(payload)
 			return M.import_findings(payload, {
 				origin = "agent",
-				id_namespace = id_namespace,
 				defer_branch_conflict = true,
 			})
 		end,

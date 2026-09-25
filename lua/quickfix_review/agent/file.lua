@@ -132,7 +132,7 @@ local function read_once(path, ready)
 			return nil, eligibility_err, skipped
 		end
 	end
-	local result, err = state.import(payload, "agent:" .. vim.fn.sha256(contents))
+	local result, err = state.import(payload)
 	if not result then
 		return nil, err
 	end

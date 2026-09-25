@@ -40,6 +40,9 @@ function M.validate(payload)
 	else
 		return nil, "notes payload must contain version 2 and a notes array"
 	end
+	if payload.origin ~= nil and (type(payload.origin) ~= "string" or payload.origin == "") then
+		return nil, "notes payload origin must be a non-empty string"
+	end
 	if payload.branch ~= nil and (type(payload.branch) ~= "string" or payload.branch == "") then
 		return nil, "notes payload branch must be a non-empty string"
 	end
@@ -58,9 +61,6 @@ function M.validate(payload)
 		end
 		if type(entry.text) ~= "string" or vim.trim(entry.text) == "" then
 			return nil, ("note %d must contain non-empty text"):format(index)
-		end
-		if entry.metadata ~= nil and type(entry.metadata) ~= "table" then
-			return nil, ("note %d metadata must be an object"):format(index)
 		end
 	end
 	return entries
@@ -133,10 +133,7 @@ local function finding_text(finding)
 	return finding.text
 end
 
-local function finding_id(finding, value, text, opts, index)
-	if opts.id_namespace then
-		return opts.id_namespace .. ":" .. index, true
-	end
+local function finding_id(finding, value, text)
 	if finding.id ~= nil then
 		if type(finding.id) ~= "string" or finding.id == "" then
 			return nil, "id must be a non-empty string"
@@ -148,25 +145,15 @@ local function finding_id(finding, value, text, opts, index)
 	return "import:" .. (ok and digest or encoded:gsub("[^%w]+", "-")), false
 end
 
-local function metadata(finding, opts, payload)
-	local value = type(finding.metadata) == "table" and vim.deepcopy(finding.metadata) or {}
-	for _, key in ipairs({ "severity", "confidence", "category", "evidence", "suggestion" }) do
-		if finding[key] ~= nil then
-			value[key] = vim.deepcopy(finding[key])
-		end
-	end
-	value.origin = opts.origin or value.origin or finding.origin or payload.origin
-	return next(value) and value or nil
+local function import_metadata(opts, payload)
+	local origin = opts.origin or payload.origin
+	return origin and { origin = origin } or nil
 end
 
 local function prepare(payload, opts)
 	local entries, validation_err = M.validate(payload)
 	if not entries then
 		return nil, validation_err
-	end
-	local encoded, encode_err = pcall(vim.json.encode, payload)
-	if not encoded then
-		return nil, "notes payload is not JSON-serializable: " .. tostring(encode_err)
 	end
 	local prepared, errors = {}, {}
 	for index, finding in ipairs(entries) do
@@ -180,7 +167,7 @@ local function prepare(payload, opts)
 			elseif not text then
 				errors[#errors + 1] = ("finding %d: %s"):format(index, text_err)
 			else
-				local id, has_id = finding_id(finding, value, text, opts, index)
+				local id, has_id = finding_id(finding, value, text)
 				if not id then
 					errors[#errors + 1] = ("finding %d: %s"):format(index, has_id)
 				else
@@ -189,7 +176,7 @@ local function prepare(payload, opts)
 						has_id = has_id,
 						location = value,
 						text = text,
-						metadata = metadata(finding, opts, payload),
+						metadata = import_metadata(opts, payload),
 						col = tonumber(finding.col) or 0,
 						end_col = tonumber(finding.end_col) or 0,
 					}
