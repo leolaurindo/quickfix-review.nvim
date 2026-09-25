@@ -4,6 +4,12 @@ All notable changes to Quickfix Review are documented here.
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-09-25
+
+### Added
+
+- Resolve notes in DeltaView buffers, mapping removed and added/context rows to their source paths, lines, and diff sides.
+
 ## [0.3.3] - 2026-09-25
 
 ### Added
