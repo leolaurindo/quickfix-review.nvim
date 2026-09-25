@@ -12,27 +12,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out Quickfix Review
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: quickfix-review.nvim
 
       - name: Check out sibling plugins
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: leolaurindo/quickfix-actions.nvim
           path: quickfix-actions.nvim
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: leolaurindo/quickfix-export.nvim
           path: quickfix-export.nvim
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: leolaurindo/quickfix-persist.nvim
           path: quickfix-persist.nvim
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: leolaurindo/quickfix-diffs.nvim
           path: quickfix-diffs.nvim
