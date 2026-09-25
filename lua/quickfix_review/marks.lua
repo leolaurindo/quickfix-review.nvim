@@ -343,6 +343,14 @@ local function visible_range(winid)
 	vim.api.nvim_win_call(winid, function()
 		first, last = vim.fn.line("w0"), vim.fn.line("w$")
 	end)
+	if last < first then
+		-- Headless Neovim 0.10 can report no visible rows before its first draw.
+		first = vim.api.nvim_win_get_cursor(winid)[1]
+		last = math.min(
+			vim.api.nvim_buf_line_count(vim.api.nvim_win_get_buf(winid)),
+			first + vim.api.nvim_win_get_height(winid) - 1
+		)
+	end
 	return first, last
 end
 
