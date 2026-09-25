@@ -69,7 +69,7 @@ and breakindent configure native wrapping. Use |QuickfixReviewListFile| from a s
 native view of that file's notes; the canonical owned list is unchanged.
 
 Regular export and send commands use template="plain" by default. Built-ins are
-plain, check these notes, broader review, question, and implement. Configure a
+plain, check these notes, review and answer, question, and implement. Configure a
 different default with template="question"; custom templates are named entries
 in templates and accept a prompt string or { prefix, suffix }. The
 |QuickfixReviewExportFromTemplate| and

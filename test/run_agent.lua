@@ -97,9 +97,19 @@ notes.send_agent_from_template({ list = target, submit = false })
 assert(selected_options.prompt == "Choose a Quickfix Review template")
 assert(sent:find("Answer the question in these notes", 1, true))
 assert(require("quickfix_review.config").get().template == "plain")
-vim.ui.select = function(_, _, callback) callback("broader review", 2) end
+vim.ui.select = function(items, _, callback)
+	assert(vim.tbl_contains(items, "review and answer"))
+	assert(not vim.tbl_contains(items, "broader review"))
+	callback("review and answer", 2)
+end
 notes.export_from_template({ list = target, destination = "sidekick" })
-assert(sent:find("also look for other actionable issues", 1, true))
+local review_prompt = table.concat({
+	"Review each note below and answer it.",
+	"Inspect relevant code and use diff context where available.",
+	"Report any other actionable issues you find.",
+	"Answer with Quickfix Review notes.",
+}, " ")
+assert(sent:find(review_prompt, 1, true))
 assert(require("quickfix_review.config").get().template == "plain")
 vim.ui.select = function(_, _, callback) callback(nil) end
 local cancelled_payload = sent
@@ -132,13 +142,14 @@ notes.setup({
 local response = {
 	version = 2,
 	origin = "agent",
+	label = "discard this",
 	notes = {
 		{
 			path = "README.md",
 			line = 1,
 			line_end = 3,
 			text = "Agent response",
-			metadata = { origin = "user" },
+			label = "discard this too",
 		},
 	},
 }
@@ -155,7 +166,7 @@ assert(vim.wait(2000, function()
 	for _, owned_item in ipairs(owned and owned.items or {}) do
 		local note = annotations.get(owned_item)
 		if note and note.text == "Agent response" then
-			assert(note.metadata.origin == "agent")
+			assert(vim.deep_equal(note.metadata, { origin = "agent" }))
 			return true
 		end
 	end
@@ -163,6 +174,16 @@ assert(vim.wait(2000, function()
 end, 20))
 assert(vim.fn.filereadable(response_path) == 0)
 assert(vim.fn.filereadable(ready_path) == 0)
+local replay = vim.deepcopy(response)
+replay.label = "another ignored label"
+replay.notes[1].label = "another ignored note label"
+assert(vim.fn.writefile({ vim.json.encode(replay) }, response_path) == 0)
+assert(vim.fn.writefile({}, ready_path) == 0)
+assert(vim.wait(2000, function()
+	return vim.fn.filereadable(response_path) == 0 and vim.fn.filereadable(ready_path) == 0
+end, 20))
+local replay_owned = assert(lists.find_owned(require("quickfix_review.scope").id(notes.scope())))
+assert(#replay_owned.items == 1)
 local user_payload = {
 	version = 2,
 	origin = "user",
