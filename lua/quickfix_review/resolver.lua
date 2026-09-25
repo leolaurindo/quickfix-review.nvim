@@ -42,11 +42,14 @@ function M.location(bufnr, winid)
 	if not resolver or type(resolver.location) ~= "function" then
 		return nil
 	end
-	local ok, value = pcall(resolver.location, bufnr, winid)
+	local ok, value, err = pcall(resolver.location, bufnr, winid)
 	if ok and value then
 		value.resolver = resolver.name
 		value.renderable = resolver.renderable
 		return require("quickfix_review.location").canonical(value)
+	end
+	if ok then
+		return nil, err
 	end
 end
 
