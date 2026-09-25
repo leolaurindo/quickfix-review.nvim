@@ -157,7 +157,11 @@ local function source_location(range_start, range_end)
 			end
 		end
 	else
-		value = resolver.location()
+		local err
+		value, err = resolver.location()
+		if not value and err then
+			return nil, err
+		end
 	end
 	if not value or not value.path then
 		return nil, "could not resolve a source location"
@@ -1267,6 +1271,7 @@ function M.setup(opts)
 	actions.setup(action_opts)
 	generic_export.setup(config.get().export or {})
 	resolver.register(require("quickfix_review.resolvers.codediff"))
+	resolver.register(require("quickfix_review.resolvers.deltaview"))
 	resolver.register(require("quickfix_review.resolvers.diffview"))
 	resolver.register(require("quickfix_review.resolvers.differ"))
 	resolver.register(require("quickfix_review.resolvers.neogit"))
