@@ -611,9 +611,10 @@ local function notes_list_options(overrides)
 		"force",
 		{},
 		config.get().notes_list,
-		{ vertical = false, wrap = false },
+		{ layout = "bottom", wrap = false },
 		overrides or {}
 	)
+	options.vertical = nil
 	options.vertical_side = nil
 	options.side = nil
 	return options
@@ -626,7 +627,7 @@ function M.open_list(opts)
 	if opts.vertical and side ~= "left" and side ~= "right" then
 		return nil, "vertical side must be 'left' or 'right'"
 	end
-	local splitright = vim.o.splitright
+	local layout = opts.layout or (opts.vertical and side) or "bottom"
 	local owned, target = lists.find_owned(scope_id())
 	if owned then
 		local items = vim.deepcopy(owned.items or {})
@@ -650,13 +651,8 @@ function M.open_list(opts)
 			lists.replace(target, items, owned.idx, owned.changedtick)
 		end
 	end
-	if opts.vertical then
-		vim.o.splitright = side == "right"
-	end
-	local ok, err = lists.open_owned(scope_id(), notes_list_options(opts))
-	if opts.vertical then
-		vim.o.splitright = splitright
-	end
+	local open_options = vim.tbl_extend("force", {}, opts, { layout = layout })
+	local ok, err = lists.open_owned(scope_id(), notes_list_options(open_options))
 	if not ok then
 		notify(err, vim.log.levels.INFO)
 	end
