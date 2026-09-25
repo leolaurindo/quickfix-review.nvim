@@ -4,6 +4,8 @@ All notable changes to Quickfix Review are documented here.
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-09-25
+
 ### Added
 
 - Configurable export and agent-send templates with one-shot template-selection commands.
@@ -14,6 +16,8 @@ All notable changes to Quickfix Review are documented here.
 - Renamed `:QuickfixReviewExportAgent` to `:QuickfixReviewExportAgentNotes`.
 - Ordinary agent sends no longer require response-mailbox instructions. Response imports now require version 2 `notes` payloads; legacy version 1 `findings` payloads are rejected.
 - Configurable native notes-list layout and wrapping, plus `:QuickfixReviewListFile` for current-file notes.
+- Ignore unknown fields in version 2 note payloads instead of copying them into annotation metadata.
+- Rename the built-in `broader review` template to `review and answer`, asking agents to respond with Quickfix Review notes.
 
 ## [0.3.2] - 2026-09-22
 
