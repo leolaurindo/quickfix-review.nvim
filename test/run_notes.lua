@@ -115,6 +115,21 @@ assert_vertical(list_win, "left")
 assert(vim.o.splitright == true)
 vim.o.splitright = false
 vim.cmd.cclose()
+assert(review.open_list({ layout = "top" }))
+list_win = vim.api.nvim_get_current_win()
+local top_info = vim.fn.getwininfo(list_win)[1]
+assert(vim.bo.buftype == "quickfix")
+local has_editor_below = false
+for _, peer in ipairs(vim.api.nvim_list_wins()) do
+	if peer ~= list_win then
+		local peer_info = vim.fn.getwininfo(peer)[1]
+		assert(peer_info.wincol == top_info.wincol)
+		assert(peer_info.winrow > top_info.winrow)
+		has_editor_below = true
+	end
+end
+assert(has_editor_below)
+vim.cmd.cclose()
 vim.cmd.QuickfixReviewListWrap()
 list_win = vim.api.nvim_get_current_win()
 assert(vim.fn.getwininfo(list_win)[1].quickfix == 1)
