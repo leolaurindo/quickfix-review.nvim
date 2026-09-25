@@ -2,13 +2,16 @@
 
 Add review notes to almost any location, such as source code,
 quickfix/location-list entries, Git diff rows and more. Notes stay visible in source 
-buffers and native lists—while remaining attached to their original producer items. 
+buffers and native lists, while remaining attached to their original producer items. 
 A dedicated `Quickfix Review` quickfix list also provides a central view for 
-reviewing, persisting, and exporting them.
+reviewing, persisting, and exporting them as formatted notes.
 
 Quickfix Review supports a bi-directional coding-agent workflow: send your
 location-aware notes to an agent, then receive its findings back as notes at the
-relevant files and ranges. Human and agent feedback share the same visible review
+relevant files and ranges. You can also plain ask your agent to add notes for whatever
+reason you may find useful, such when trying to understand a codebase.
+
+Human and agent feedback share the same visible review
 surface instead of being confined to a chat transcript or separate report.
 
 Quickfix Review works standalone or as part of the [quickfix-kit.nvim](https://github.com/leolaurindo/quickfix-kit.nvim) package.
@@ -249,7 +252,7 @@ reveals newly visible ones, while leaving the window disables the overlays.
 ### Export, send, and clear semantics
 
 Regular export and send commands use the configured `template` without opening a
-picker. The built-ins are `plain`, `check these notes`, `broader review`,
+picker. The built-ins are `plain`, `check these notes`, `review and answer`,
 `question`, and `implement`; `plain` adds no prompt text. The `...FromTemplate`
 commands open a one-shot selector and do not change the configured default.
 Custom entries in `templates` accept a prompt string or `{ prefix, suffix }`,
@@ -414,9 +417,10 @@ that file, whether or not it has a `.ready` marker. A top-level `branch` field
 restricts import to that Git branch; mismatches remain queued in automatic and
 batch imports. For an explicit file only, `:QuickfixReviewImport! <file>` bypasses
 the branch guard, not schema validation. The equivalent Lua API accepts a table
-or file path. Payloads must use `version: 2` with a top-level `notes` array;
-`version: 1` payloads with `findings` are rejected. Payloads without `branch`
-import into the active review scope.
+or file path. Payloads must use `version: 2` and a top-level `notes` array;
+`origin` and `branch` are optional strings. Payloads without `branch` import into
+the active review scope. Additional keys on payload, note, and nested `location`
+objects are discarded; they do not affect the imported notes or their metadata.
 
 The automatic watcher and no-argument batch command consume a payload and its
 `.ready` marker only after successful import. Invalid or unsupported payloads
@@ -425,15 +429,16 @@ mismatch are rescanned when Quickfix Review observes a branch/worktree change.
 Each agent response should use its own collision-resistant prefixed filename
 ending in `-agent-response.json`; never overwrite another response.
 
-Each note requires `text` and a repository-relative `path`; `line` and
-`line_end` are optional. Stable string IDs update existing notes; notes without
-IDs match by location. `severity`, `confidence`, `category`, `evidence`, and
-`suggestion` are retained in `note.metadata`. Imported agent notes use
-`metadata.origin = "agent"`; existing notes without an origin are treated as
-user-authored. Agent notes use the robot glyph in source and quickfix/location-list
-buffers; user notes use the pencil in both. Without Nerd Fonts they fall back to
-`AGENT` and `✎`. Indicators share the same theme-aware color and never change
-native item text.
+Each note requires `text` and a repository-relative `path` or `file`; `line` and
+`line_end` are optional. A note may also use `location`, `id`, `side`, `revision`,
+`hash`, `resolver`, `col`, and `end_col`. A nested `location` accepts `path` or
+`file`, line-range fields, and diff identity fields (`side`, `revision`, `hash`,
+`resolver`). Stable string IDs update existing notes; notes without IDs match by
+location. The importer sets `metadata.origin` internally; existing notes without
+an origin are treated as user-authored. Agent notes use the robot glyph in source
+and quickfix/location-list buffers; user notes use the pencil in both. Without
+Nerd Fonts they fall back to `AGENT` and `✎`. Indicators share the same theme-aware
+color and never change native item text.
 
 ```json
 {
@@ -445,11 +450,7 @@ native item text.
       "path": "lua/example.lua",
       "line": 10,
       "line_end": 12,
-      "text": "The failure path skips cleanup.",
-      "severity": "high",
-      "confidence": 0.94,
-      "evidence": "The error return bypasses cleanup.",
-      "suggestion": "Run cleanup before returning the error."
+      "text": "The failure path skips cleanup."
     }
   ]
 }
