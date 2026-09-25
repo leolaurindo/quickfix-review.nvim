@@ -40,7 +40,7 @@ jobs:
       - name: Install Neovim
         uses: rhysd/action-setup-vim@v1
         with:
-          vim_type: neovim
+          neovim: true
           version: v0.10.4
 
       - name: Run test suite
