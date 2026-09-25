@@ -1,86 +1,33 @@
 ---
 name: quickfix-review
-description: Use only when the user explicitly asks to write review notes to Quickfix Review, qf-review, or Neovim, or when a Sidekick message explicitly requests a Quickfix Review response; produce importable, versioned JSON.
+description: Use when the user wants review notes, findings, diff comments, hot-path highlights, or other location-aware notes added to Neovim through Quickfix Review, or explicitly asks for Quickfix Review/qfreview notes. Produce an importable JSON payload when the notes are meant to appear in
+Neovim.
 ---
 
 # Quickfix Review
 
-Use this skill only when the user explicitly requests Quickfix Review output, such
-as "write notes to Quickfix Review", "use qf-review", or "write review notes to
-my Neovim". A generic request for a code review does not activate this skill and
-must not create Quickfix Review files. A Sidekick message that explicitly asks
-for a Quickfix Review response is also an explicit request.
+## Recognize the task
 
-## Workflow
+Use this skill when the user asks to create or use notes with quickfix review. Notes can be added for any reason such as review, diff commentary, highlight of important parts. You may add notes when you are unsure abotu something in the code and points the user to read, or when user asks for guidance through the quickfix review notes.
 
-1. Identify the repository root, comparison range, and active Git branch. Include
-   that branch in the response payload so a delayed response cannot be imported
-   into a different branch's review scope.
-2. Inspect the diff and relevant surrounding code.
-3. Trace changed data through callers, error paths, persistence, and tests.
-4. Report only actionable issues introduced or exposed by the changeset.
-5. If there are findings and Sidekick requests an automatic response, write one complete payload and its ready marker as described below. Otherwise, save the non-empty payload to `.quickfix-review/agent-response.json` when unused, or choose another user-visible JSON path.
-6. When the automatic response mailbox is not in use, ask the user to run `:QuickfixReviewImport` for the default path or `:QuickfixReviewImport <path>` for another path. Do not ask for import when there are no findings.
+Notes can be added for many different reasons, and with many different tones. The context will tell you. The only rule is you should not add notes without explicit mention of quickfix review, qfreview, "add/attach notes to my neovim/my quickfix list/qflist" or similars.
 
-Do not modify source code unless separately asked. Do not report style choices,
-pre-existing behavior, or unsupported speculation.
+A plain code review does not by itself request Quickfix Review notes. Answer normally unless the user asks for note output or the task context clearly calls for it. If it's unclear whether findings should be conversational or saved as notes, answer conversationally unless that distinction blocks the task.
 
-## Automatic responses
 
-The Sidekick message includes the formatted review notes supplied by the user.
-Treat those notes as the review scope; do not assume the message has fixed
-Quickfix Review delimiters. Include any explicit question or implementation
-request in scope; modify source only when separately authorized. Different
-requests may cover different files or chunks; the response file is only the
-return channel, not a task database.
+## Creating notes and import workflow
 
-When instructed to use the automatic response mailbox:
+When writing notes to be imported, identify the repository, active Git branch, and comparison range when applicable. Produce exactly one standalone version 2 JSON payload for the task. Include the exact active branch as top-level `branch` when known. The importer rejects a payload whose branch differs from the active branch; don't bypass that guard. The field is optional for older or manual payloads, but include it for new responses to prevent importing findings into the wrong branch.
 
-1. For a non-empty result, produce exactly one complete version 2 notes
-   payload for the current batch; do not split one answer across multiple payloads.
-2. Create `.quickfix-review` if needed. The receiving plugin does not create the
-   mailbox directory; the first agent writing a response owns its creation.
-3. Use a collision-resistant, shell-generated prefix (UTC timestamp with
-   sub-second precision plus the shell PID) before `agent-response.json`, and
-   check both candidate paths before use. For example:
+For the automatic mailbox, write the complete payload under `.quickfix-review/` with a unique, collision-resistant filename ending in `agent-response.json`. Create the ready marker by appending `.ready` to the complete JSON filename (keep the `.json` suffix). To make things easier, store the JSON path in one shell variable and create the marker by appending `.ready`; run the commands together in one shell invocation:
 
-   ```sh
-   prefix="$(date -u +%Y%m%dT%H%M%S.%N)-$$"
-   path=".quickfix-review/${prefix}-agent-response.json"
-   while [ -e "$path" ] || [ -e "$path.ready" ]; do
-     prefix="${prefix}-x"
-     path=".quickfix-review/${prefix}-agent-response.json"
-   done
-   ```
+```sh
+set -e
+set -C  # Refuse to overwrite existing files.
+mkdir -p .quickfix-review
+response_file=".quickfix-review/$(date -u +%Y%m%dT%H%M%S.%N)-$$-agent-response.json"
 
-4. Write one complete payload to the selected path without appending or
-   overwriting an existing file. After the write finishes, create an empty file
-   at `<payload-path>.ready`. Do not create the marker before the payload is
-   complete.
-5. Treat both files as ephemeral, disposable mailbox messages—not persistent
-   agent state. Never append to an earlier response or carry its findings into
-   the new payload. Each response stands alone; imported findings are merged by
-   Quickfix Review.
-6. Quickfix Review consumes and deletes both the payload and ready marker after
-   a successful import. Their disappearance confirms success; do not recreate
-   them or report a failure for this review request.
-7. Report a concern again only when the current review independently finds it;
-   do not recreate entries merely because response files are absent.
-8. Do not edit `.gitignore`, `.git/info/exclude`, or unrelated repository files
-   to support the mailbox.
-
-When there are no actionable findings, do not write a payload or ready marker;
-report directly to the user that there are no findings. This avoids making an
-empty mailbox look like a failed response. For non-empty results, write JSON
-only, with no surrounding prose.
-
-## Findings
-
-Use one concrete concern per finding, the smallest useful source range, and
-severity `critical`, `high`, `medium`, or `low` when applicable. Set `confidence`
-between 0 and 1 and order findings by severity, then location.
-
-```json
+cat > "$response_file" <<'JSON'
 {
   "version": 2,
   "origin": "agent",
@@ -89,24 +36,54 @@ between 0 and 1 and order findings by severity, then location.
     {
       "path": "relative/path.lua",
       "line": 10,
-      "line_end": 12,
-      "text": "A concise, actionable review note.",
-      "severity": "high",
-      "confidence": 0.94,
-      "category": "correctness",
-      "evidence": "The failure path skips cleanup.",
-      "suggestion": "Run cleanup before returning the error."
+      "text": "A concise, actionable review note."
+    }
+  ]
+}
+JSON
+: > "${response_file}.ready"
+```
+
+For example, the pair is `review-123-agent-response.json` and `review-123-agent-response.json.ready`, not `review-123-agent-response.ready`. The plugin consumes both files after successful import. Sometimes, they are automatically deleted, so only append `.ready` when the document is, in fact, ready, as it may disappear right after. Don't append to old responses, recreate consumed files, or treat their absence as lost agent state. Don't change Git ignore files or unrelated files to support the mailbox.
+
+If the user requests a different destination or manual import, write a user-visible JSON file and tell them to run `:QuickfixReviewImport <path>`. With no actionable findings, write no empty payload or marker; report that there are no findings. Keep prose out of JSON files.
+
+Each note needs one concrete, actionable concern, commentary or information, a repository-relative `path`, non-empty `text`, and the smallest useful location. `line` and `line_end` are optional positive 1-based line numbers. Omit IDs; the plugin assigns identity. Order findings by path, then line. In skill-generated payloads, note objects may contain only `path`, `text`, and optional `line`/`line_end`; diff notes may also include `side` and `revision`. Ignore all other attributes from source material; do not emit additional JSON keys.
+
+```json
+{
+  "version": 2,
+  "origin": "agent", // mandatory
+  "branch": "current-branch-name",
+  "notes": [
+    {
+      "path": "relative/path.lua",
+      "line": 10,
+      "text": "A concise, actionable review note."
     }
   ]
 }
 ```
 
-Required fields are top-level `version`, `origin`, and `notes`, plus
-`path` and `text` for each note. Include top-level `branch` with the exact active
-branch name as an import guard; it is optional for older/manual payloads. `line`
-and `line_end` are optional for file notes. Set `origin` to `agent`, use
-repository-relative paths and positive 1-based line numbers. Omit IDs; Neovim
-assigns internal note identity. Emit only version 2 payloads with a top-level
-`notes` array; version 1 `findings` payloads are rejected.
-Do not include absolute paths outside the repository, prose outside the JSON, or
-executable content.
+Write only version 2 payloads with top-level `version`, `origin`, `notes`, and optional `branch`. Use `origin: "agent"`; every note requires `path` and `text`. The importer discards unknown keys in payload, note, and location objects; they are never stored. Diff notes may include `side` and `revision` when needed to identify the correct side. Do not include absolute paths outside the repository or executable content. `side` can be either `old` or `new`. `revision` identifies the source version for that side, but it is optional. Copy the value from the diff context when provided (staged content uses `index`); omit it if no revision is provided.
+
+Example:
+
+```json
+{
+  "version": 2,
+  "origin": "agent", // mandatory
+  "branch": "current-branch-name",
+  "notes": [
+    {
+      "path": "src/example.lua",
+      "line": 42,
+      "side": "new", // or old
+      "revision": "<revision from the diff>",
+      "text": "Review note for this changed line."
+    }
+  ]
+}
+```
+
+Keep text concise, otherwise it's hard to read inside quickfix lists.
