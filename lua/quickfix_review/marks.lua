@@ -27,7 +27,6 @@ local hover_win
 local hover_buf
 local hover_key -- payload currently displayed (nil when nothing is shown)
 local hover_auto = true -- automatic hover; runtime switch: M.hover_toggle()
-local hover_lines_count
 local hover_geometry -- last placed row/col/width/height, so an unchanged hover never moves
 local hover_group = vim.api.nvim_create_augroup("QuickfixReviewHover", { clear = true })
 local hover_all = {}
@@ -55,7 +54,7 @@ local function close_hover()
 			pcall(vim.api.nvim_buf_delete, buf, { force = true })
 		end
 	end
-	hover_win, hover_buf, hover_key, hover_lines_count, hover_geometry = nil, nil, nil, nil, nil
+	hover_win, hover_buf, hover_key, hover_geometry = nil, nil, nil, nil
 end
 
 -- Where the hover belongs: next to the end of the text on the line it refers to (the
@@ -364,8 +363,8 @@ local function open_note_popup(state, note, line, offset)
 	width = math.min(width + 2, math.max(1, source_width - 4))
 	local height = math.max(1, math.min(#lines, 10))
 	local padded = {}
-	for _, line in ipairs(lines) do
-		padded[#padded + 1] = " " .. line
+	for _, text_line in ipairs(lines) do
+		padded[#padded + 1] = " " .. text_line
 	end
 	local buf = vim.api.nvim_create_buf(false, true)
 	vim.api.nvim_buf_set_lines(buf, 0, -1, false, padded)
@@ -443,9 +442,9 @@ function M.setup(opts)
 			vim.api.nvim_set_hl(0, "QuickfixReviewMark", { link = "DiagnosticInfo" })
 		end,
 	})
-	local hover_group = vim.api.nvim_create_augroup("QuickfixReviewHoverAll", { clear = true })
+	local hover_all_group = vim.api.nvim_create_augroup("QuickfixReviewHoverAll", { clear = true })
 	vim.api.nvim_create_autocmd({ "WinScrolled", "WinResized" }, {
-		group = hover_group,
+		group = hover_all_group,
 		callback = function()
 			for winid in pairs(hover_all) do
 				refresh_hover_all(winid)
@@ -462,7 +461,7 @@ function M.setup(opts)
 		end,
 	})
 	vim.api.nvim_create_autocmd({ "BufLeave", "WinLeave" }, {
-		group = hover_group,
+		group = hover_all_group,
 		callback = function()
 			local winid = vim.api.nvim_get_current_win()
 			close_hover_all(winid, true)
@@ -472,7 +471,7 @@ function M.setup(opts)
 		end,
 	})
 	vim.api.nvim_create_autocmd("WinClosed", {
-		group = hover_group,
+		group = hover_all_group,
 		callback = function(event)
 			close_rail(tonumber(event.match))
 		end,
@@ -606,7 +605,7 @@ local function open_hover(lines, key)
 			width = width,
 			height = height,
 		})
-		hover_key, hover_lines_count, hover_geometry = key, #lines, { row, col, width, height }
+		hover_key, hover_geometry = key, { row, col, width, height }
 		return
 	end
 
@@ -629,7 +628,7 @@ local function open_hover(lines, key)
 	for _, event in ipairs({ "InsertCharPre", "BufLeave", "WinLeave" }) do
 		vim.api.nvim_create_autocmd(event, { group = hover_group, callback = close_hover })
 	end
-	hover_win, hover_buf, hover_key, hover_lines_count, hover_geometry = win, buf, key, #lines, { row, col, width, height }
+	hover_win, hover_buf, hover_key, hover_geometry = win, buf, key, { row, col, width, height }
 end
 
 -- The notes that belong under the cursor right now, as both text and identity.

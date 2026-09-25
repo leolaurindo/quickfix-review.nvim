@@ -18,7 +18,6 @@ vim.cmd.cd(root)
 vim.cmd.edit(root .. "/file.txt")
 
 local review = require("quickfix_review")
-local marks = require("quickfix_review.marks")
 local ui = require("quickfix_review.ui")
 review.setup({ persist_review_list = false, agent = { response = { watch = false } } })
 ui.note_input = function(_, callback)
