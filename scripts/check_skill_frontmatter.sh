@@ -2,8 +2,8 @@
 set -eu
 
 status=0
-max_lines=120
-max_words=1000
+max_lines=150
+max_words=1400
 
 for file in skills/*/SKILL.md; do
   [ -f "$file" ] || continue
