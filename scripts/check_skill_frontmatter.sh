@@ -2,6 +2,8 @@
 set -eu
 
 status=0
+max_lines=120
+max_words=1000
 
 for file in skills/*/SKILL.md; do
   [ -f "$file" ] || continue
@@ -41,6 +43,13 @@ for file in skills/*/SKILL.md; do
     }
   ' "$file"; then
     status=1
+  fi
+
+  lines=$(wc -l < "$file")
+  words=$(wc -w < "$file")
+  if [ "$lines" -gt "$max_lines" ] || [ "$words" -gt "$max_words" ]; then
+    printf 'WARNING: %s is large (%s lines, %s words; limits are %s/%s)\n' \
+      "$file" "$lines" "$words" "$max_lines" "$max_words"
   fi
 done
 
