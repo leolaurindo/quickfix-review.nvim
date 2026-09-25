@@ -1,0 +1,42 @@
+name: Checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Quickfix Review
+        uses: actions/checkout@v4
+        with:
+          path: quickfix-review.nvim
+
+      - name: Check out sibling plugins
+        uses: actions/checkout@v4
+        with:
+          repository: leolaurindo/quickfix-actions.nvim
+          path: quickfix-actions.nvim
+
+      - uses: actions/checkout@v4
+        with:
+          repository: leolaurindo/quickfix-export.nvim
+          path: quickfix-export.nvim
+
+      - uses: actions/checkout@v4
+        with:
+          repository: leolaurindo/quickfix-persist.nvim
+          path: quickfix-persist.nvim
+
+      - uses: actions/checkout@v4
+        with:
+          repository: leolaurindo/quickfix-diffs.nvim
+          path: quickfix-diffs.nvim
+
+      - name: Run test suite
+        working-directory: quickfix-review.nvim
+        run: make test

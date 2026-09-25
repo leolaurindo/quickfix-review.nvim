@@ -1,14 +1,13 @@
 ---
 name: quickfix-review
-description: Use when the user wants review notes, findings, diff comments, hot-path highlights, or other location-aware notes added to Neovim through Quickfix Review, or explicitly asks for Quickfix Review/qfreview notes. Produce an importable JSON payload when the notes are meant to appear in
-Neovim.
+description: Use when the user wants review notes, findings, diff comments, hot-path highlights, or other location-aware notes added to Neovim through Quickfix Review, or explicitly asks for Quickfix Review/qfreview notes. Produce an importable JSON payload when the notes are meant to appear in Neovim.
 ---
 
 # Quickfix Review
 
 ## Recognize the task
 
-Use this skill when the user asks to create or use notes with quickfix review. Notes can be added for any reason such as review, diff commentary, highlight of important parts. You may add notes when you are unsure abotu something in the code and points the user to read, or when user asks for guidance through the quickfix review notes.
+Use this skill when the user asks to create or use notes with quickfix review. Notes can be added for any reason such as review, diff commentary, highlight of important parts. You may add notes when you are unsure about something in the code and points the user to read, or when user asks for guidance through the quickfix review notes.
 
 Notes can be added for many different reasons, and with many different tones. The context will tell you. The only rule is you should not add notes without explicit mention of quickfix review, qfreview, "add/attach notes to my neovim/my quickfix list/qflist" or similars.
 
