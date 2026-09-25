@@ -17,3 +17,4 @@ kept alongside canonical native data.
 - Keep quickfix/location-list buffers native and read-only; don't parse rendered
   rows, don't own `quickfixtextfunc`, and don't persist producer lists automatically.
 - Keep sibling checkouts and `test/manual_init.lua` working during local development.
+- Before handoff, run `make test`; it includes the Lua tests and skill frontmatter check. If it fails, fix the issue and run `make test` again.

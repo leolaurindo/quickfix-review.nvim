@@ -528,12 +528,7 @@ notes quickfix list as `quickfix_review/review` under repository/branch scope. U
 
 ```sh
 nvim -u test/manual_init.lua
-nvim --headless -u NONE -l test/run.lua
-nvim --headless -u NONE -l test/run_export_ui.lua
-nvim --headless -u NONE -l test/run_notes.lua
-nvim --headless -u NONE -l test/run_with_persist.lua
-nvim --headless -u NONE -l test/run_with_diffs.lua
-luacheck lua test
+make test
 ```
 
 Sibling paths can be overridden with `QUICKFIX_ACTIONS_PATH`,
