@@ -51,7 +51,7 @@ local unprotected, protect_warning = require("quickfix_review.agent.file").prote
 	".quickfix-review/agent-response.json",
 	true
 )
-assert(unprotected and protect_warning and protect_warning:find("visible to Git", 1, true))
+assert(unprotected and protect_warning == nil)
 vim.fn.delete(nongit, "rf")
 
 local filename = vim.fs.joinpath(root, "README.md")

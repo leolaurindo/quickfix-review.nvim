@@ -46,6 +46,9 @@ function M.protect(root, path, enabled)
 	if not absolute then
 		return nil, relative
 	end
+	if git({ "rev-parse", "--show-toplevel" }, root).code ~= 0 then
+		return absolute
+	end
 	local ignored = git({ "check-ignore", "-q", "--no-index", "--", relative }, root)
 	if ignored.code == 0 then
 		return absolute
